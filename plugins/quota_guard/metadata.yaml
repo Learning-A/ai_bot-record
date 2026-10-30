@@ -1,0 +1,5 @@
+name: quota_guard
+display_name: 额度管家
+desc: 每日 token 用量统计与限额，超限自动停用 AI 到次日；/额度 随时查用量和花费
+author: qq-ai-bot
+version: 1.0.0

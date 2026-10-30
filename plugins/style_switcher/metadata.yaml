@@ -1,0 +1,5 @@
+name: style_switcher
+display_name: 风格切换器
+desc: 每个聊天对象独立切换AI人格风格（/风格 查看，/风格 <名字> 切换，只影响自己）
+author: qq-ai-bot
+version: 1.0.0

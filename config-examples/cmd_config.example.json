@@ -1,0 +1,56 @@
+{
+  "_说明": "AstrBot 主配置结构示例：复制到 astrbot/data/cmd_config.json 后填入你自己的值。所有密钥/QQ号均为占位符。",
+  "provider": [
+    {
+      "id": "deepseek_chat",
+      "type": "openai_chat_completion",
+      "provider_source_id": "src_deepseek",
+      "model_config": { "model": "deepseek-chat", "temperature": 0.8, "max_tokens": 4096 }
+    },
+    {
+      "id": "siliconflow_embedding",
+      "type": "openai_chat_completion",
+      "provider_source_id": "src_siliconflow",
+      "model_config": { "model": "BAAI/bge-m3" },
+      "api_base": "https://api.siliconflow.cn/v1"
+    },
+    {
+      "id": "glm_4v_flash",
+      "type": "openai_chat_completion",
+      "provider_source_id": "src_zhipu",
+      "model_config": { "model": "glm-4v-flash" },
+      "api_base": "https://open.bigmodel.cn/api/paas/v4"
+    }
+  ],
+  "provider_sources": [
+    { "id": "src_deepseek", "type": "openai", "key": ["sk-<你的DeepSeek Key>"], "api_base": "https://api.deepseek.com/v1" },
+    { "id": "src_siliconflow", "type": "openai", "key": ["sk-<你的SiliconFlow Key>"], "api_base": "https://api.siliconflow.cn/v1" },
+    { "id": "src_zhipu", "type": "openai", "key": ["<你的智谱Key>"], "api_base": "https://open.bigmodel.cn/api/paas/v4" }
+  ],
+  "provider_tts_settings": { "enable": false },
+  "tts": [
+    {
+      "id": "sf_tts",
+      "type": "openai_tts_api",
+      "provider_source_id": "src_siliconflow",
+      "model": "FunAudioLLM/CosyVoice2-0.5B",
+      "openai-tts-voice": "<克隆音色URI或预设名>",
+      "api_base": "https://api.siliconflow.cn/v1"
+    }
+  ],
+  "wake_prefix": [""],
+  "admins_id": ["astrbot", "<你的QQ号>"],
+  "agent_runner": {
+    "config": {
+      "persona": { "persona_id": "<默认人格ID，如 paopao>" },
+      "method": "tool_loop"
+    }
+  },
+  "segmented_reply": {
+    "enabled": true,
+    "regex": ".*?[。？！~…\\n]+|.+",
+    "content_cleanup_rule": "\\s*\\n+\\s*",
+    "interval": [1.5, 3.5]
+  },
+  "_其余配置": "按 AstrBot 官方默认即可；本仓库 plugins/ 下 8 个自研插件放入 astrbot/data/plugins/ 后在 WebUI 启用"
+}

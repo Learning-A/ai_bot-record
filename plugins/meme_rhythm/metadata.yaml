@@ -1,0 +1,5 @@
+name: meme_rhythm
+display_name: 表情包节奏镜像
+desc: 统计每个聊天对象的表情/图使用频率（滚动窗口），每次请求注入对标指令：对方发图多就多刷表情包，对方高冷就收敛——变相的用户画像
+author: qq-ai-bot
+version: 1.0.0

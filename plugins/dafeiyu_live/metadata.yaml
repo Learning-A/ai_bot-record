@@ -1,0 +1,6 @@
+name: dafeiyu_live
+display_name: 大肥鱼直播助手
+desc: B站开播自动提醒 + /直播状态 实时查询，直播间号自动跟随 Bili Live Hime
+author: qq-ai-bot
+version: 1.0.0
+repo: https://github.com/AstrBotDevs/AstrBot

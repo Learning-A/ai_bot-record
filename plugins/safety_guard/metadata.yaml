@@ -1,0 +1,5 @@
+name: safety_guard
+display_name: 安全护栏（四层纵深防御）
+desc: 输入消毒（角色伪装标记转义+注入特征检测）+ 安全铁律注入 + 非主人剥离花钱工具（架构级最小权限）+ 滑窗限流与安全审计日志（/安全报告）
+author: qq-ai-bot
+version: 1.0.0

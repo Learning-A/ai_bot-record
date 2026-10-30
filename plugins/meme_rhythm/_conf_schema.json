@@ -1,0 +1,12 @@
+{
+  "window_size": {
+    "description": "统计滚动窗口大小（最近多少条消息）",
+    "type": "int",
+    "default": 60
+  },
+  "min_sample": {
+    "description": "给出节奏指引所需的最小样本条数",
+    "type": "int",
+    "default": 8
+  }
+}

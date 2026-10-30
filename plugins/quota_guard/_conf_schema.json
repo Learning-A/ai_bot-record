@@ -1,0 +1,27 @@
+{
+  "daily_cost_limit": {
+    "description": "每日花费上限（元）。今日预估花费达到该值后停用AI到次日0点。0=不启用",
+    "type": "float",
+    "default": 0
+  },
+  "daily_token_limit": {
+    "description": "每日总token限额（输入+输出合计）。默认40万，设 0 关闭限额（花费限额启用时可留0）",
+    "type": "int",
+    "default": 400000
+  },
+  "price_input_per_m": {
+    "description": "输入token单价（元/百万token），用于估算花费，以DeepSeek官网价格为准",
+    "type": "float",
+    "default": 0.2
+  },
+  "price_output_per_m": {
+    "description": "输出token单价（元/百万token），用于估算花费",
+    "type": "float",
+    "default": 0.8
+  },
+  "bypass_admins": {
+    "description": "管理员（admins_id里的QQ号）不受限额限制",
+    "type": "bool",
+    "default": true
+  }
+}

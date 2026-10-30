@@ -1,0 +1,26 @@
+# 密钥与隐私（绝不上传）
+*.txt.key
+*api*.txt
+gpu服务器.txt
+_glm_key.txt
+
+# 运行时数据
+*.log
+*.db
+*.db-*
+__pycache__/
+*.pyc
+plugin_data/
+logs/
+output/
+download/
+
+# 模型与索引（体积大，不入库）
+*.pth
+*.ckpt
+*.faiss
+*.bin
+
+# 系统文件
+Thumbs.db
+.DS_Store

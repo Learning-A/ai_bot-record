@@ -1,0 +1,5 @@
+name: qq_face_eyes
+display_name: QQ表情翻译官
+desc: 把QQ自带小黄人表情(face id)翻译成文字含义注入LLM，让机器人"看得懂"你发的表情
+author: qq-ai-bot
+version: 1.0.0

@@ -1,0 +1,5 @@
+name: core_memory
+display_name: 核心记忆（四层记忆-L4）
+desc: Letta式核心记忆块：自我认知卡（全局）+ 主人档案卡（按人隔离），每轮对话始终注入，AI可主动编辑，不依赖检索
+author: qq-ai-bot
+version: 1.0.0

@@ -1,0 +1,5 @@
+name: voice_on_demand
+display_name: 按需语音（AI自主决定何时发语音）
+desc: 像真人一样：平时打字，AI 自己判断情绪/场景合适时才调用 send_voice 发语音条，而非机械全覆盖
+author: qq-ai-bot
+version: 1.0.0

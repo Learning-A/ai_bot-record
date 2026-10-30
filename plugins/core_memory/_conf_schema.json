@@ -1,0 +1,7 @@
+{
+  "max_items_per_card": {
+    "description": "每张核心记忆卡的最大条数",
+    "type": "int",
+    "default": 20
+  }
+}

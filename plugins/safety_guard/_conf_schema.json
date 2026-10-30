@@ -1,0 +1,7 @@
+{
+  "rate_per_min": {
+    "description": "每会话每分钟消息数上限（超过则静默限流并记录）",
+    "type": "int",
+    "default": 20
+  }
+}
