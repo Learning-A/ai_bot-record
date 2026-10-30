@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>大肥鱼监控台</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+    background: linear-gradient(160deg, #101a30 0%, #0b1222 100%);
+    color: #eaf2ff; display: flex; flex-direction: column; overflow: hidden;
+  }
+  header {
+    display: flex; align-items: center; gap: 10px; padding: 10px 16px;
+    background: rgba(255,255,255,.05); border-bottom: 1px solid rgba(255,255,255,.1);
+    font-size: 14px;
+  }
+  header b { font-size: 16px; color: #fff; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: #e05a5a; transition: background .3s; }
+  .dot.on { background: #3ecf6e; box-shadow: 0 0 8px #3ecf6e; }
+  .tag { color: #9fb4d8; }
+  .pop { margin-left: auto; color: #ffd452; font-weight: 700; }
+
+  .main { flex: 1; display: flex; min-height: 0; }
+  .fish-panel {
+    width: 460px; min-width: 460px; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; border-right: 1px solid rgba(255,255,255,.1);
+    background:
+      radial-gradient(closest-side at 50% 55%, rgba(64,150,255,.25), transparent 75%);
+  }
+  .fish-panel video { width: 420px; height: 236px; }
+  #now-playing { margin-top: 10px; font-size: 14px; color: #9fb4d8; min-height: 20px; }
+  #now-playing b { color: #ffd452; }
+
+  .side { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  .btns { padding: 14px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .btns button {
+    padding: 12px 6px; font-size: 15px; font-weight: 700; color: #eaf2ff;
+    background: rgba(255,255,255,.09); border: 1px solid rgba(255,255,255,.22);
+    border-radius: 12px; cursor: pointer; transition: all .15s;
+  }
+  .btns button:hover { background: #23ade5; border-color: #23ade5; transform: translateY(-1px); }
+  .btns button:active { transform: translateY(0); }
+  .btns button.hl { background: rgba(251,114,153,.25); border-color: #fb7299; }
+
+  .feed-title { padding: 4px 16px; font-size: 13px; color: #9fb4d8; border-top: 1px solid rgba(255,255,255,.1); }
+  #feed { flex: 1; overflow-y: auto; padding: 6px 16px 12px; font-size: 14px; }
+  #feed .row { padding: 5px 8px; border-radius: 8px; margin-bottom: 3px; color: #cdd9ee; }
+  #feed .row.hit { background: rgba(251,114,153,.18); color: #fff; }
+  #feed .row .u { color: #23ade5; font-weight: 700; margin-right: 6px; }
+  #feed .row .a { color: #ffd452; margin-left: 6px; font-weight: 700; }
+  #feed .row .cd { color: #8a93a8; margin-left: 6px; font-size: 12px; }
+  #feed .empty { color: #6c7a94; padding: 12px 8px; }
+  .warn {
+    display: none; background: rgba(224,90,90,.2); border: 1px solid #e05a5a;
+    padding: 8px 14px; font-size: 13px; color: #ffd7d7;
+  }
+  .warn.show { display: block; }
+</style>
+</head>
+<body>
+<header>
+  <b>🐟 大肥鱼监控台</b>
+  <span class="dot" id="dot-hub" title="本地网关"></span><span class="tag">网关</span>
+  <span class="dot" id="dot-dm" title="弹幕源"></span><span class="tag">弹幕源</span>
+  <span class="tag" id="roomid"></span>
+  <span class="pop" id="pop">人气 0</span>
+</header>
+<div class="warn" id="warn">网关未连接——请运行 直播形象/danmaku_hub.py（监控台与直播画面将失去联动）</div>
+
+<div class="main">
+  <div class="fish-panel">
+    <video id="vid" autoplay muted playsinline></video>
+    <div id="now-playing">当前：<b id="cur">待机呼吸休闲</b></div>
+  </div>
+  <div class="side">
+    <div class="btns" id="btns">
+      <button data-k="吃饭" class="hl">🍚 吃饭</button>
+      <button data-k="跳舞">💃 跳舞</button>
+      <button data-k="烟花">🎆 烟花</button>
+      <button data-k="睡觉">😴 睡觉</button>
+      <button data-k="写代码">💻 写代码</button>
+      <button data-k="摸鱼">🐟 摸鱼</button>
+      <button data-k="唱歌">🎵 唱歌</button>
+      <button data-k="撸猫">🐈 撸猫</button>
+      <button data-k="加油">🎉 加油</button>
+      <button data-k="惊吓">😱 惊吓</button>
+      <button data-k="魔术">🎩 魔术</button>
+      <button data-k="堆雪人">⛄ 堆雪人</button>
+      <button data-act="random">🎲 随机动作</button>
+      <button data-act="wave">👋 挥手</button>
+      <button data-act="idle">💤 回待机</button>
+      <button data-k="过年">🧧 过年</button>
+    </div>
+    <div class="feed-title">实时弹幕（关键词触发动作会高亮）——观众试试发：吃饭 / 跳舞 / 烟花 / 睡觉 / 写代码 / 摸鱼</div>
+    <div id="feed"><div class="empty">等待弹幕…</div></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var IDLE = '待机呼吸休闲';
+  var IDLE_POOL = ['待机呼吸休闲'];
+  var CLICKS = ['点击回应-开心跃动','点击回应-害羞惊讶','点击回应-傲娇生气','点击回应-挠痒咯咯笑','点击回应-元气挥手'];
+  var ALL = ["三球抛接","下五子棋","东张西望","中秋赏月吃月饼","优雅女仆舞","余额-分文不剩","余额-数金皱眉","余额-袋空如洗","余额-金袋叮当","余额-钱袋如常","余额-钱袋满溢","偷吃零食被抓住","写代码","写福字","凭空生花","动物环绕","原地专心玩魔方","原地小憩沉眠","原地左转奔跑","原地敲击桌面互动","原地漂浮踏步","原地跳跃抓碎头顶物品","原地蹲下玩玩具汽车","原地重力下蹲压缩","变鸽子","可爱宅舞","吃Token","吃冰淇淋融化","吃午餐","吃大闸蟹","吃年糕","吃早餐","吃晚餐","吃汤圆","吃白饭","吃粽子","吃糖葫芦","吃腊八粥","吃西瓜","吃重阳糕","吃长寿面","吃青团","吃饺子","吹气球","吹笛子","哈欠连天","堆雪人","大口吃零食","女仆屈膝礼仪","小幅度原地360度旋转展示","小提琴演奏","工作状态-原地踱步张望","工作状态-垂头叹气冒汗","工作状态-忙碌点按","工作状态-思考冒泡","工作状态-清点归档","工作状态-雀跃庆祝","待机呼吸休闲","悠闲哼歌","扑克魔术","打瞌睡被惊醒","抽陀螺","拆礼物","插茱萸赏菊","摇扇纳凉","撸猫","收红包","放孔明灯","放河灯","放烟花","放风筝","整体换装试色","是啊，吃什么","晨间刷牙","涮火锅","深度思考碎碎念","点击回应-傲娇生气","点击回应-元气挥手","点击回应-害羞惊讶","点击回应-开心跃动","点击回应-挠痒咯咯笑","照镜子","玩水枪","玩游戏气急败坏","用鲸鱼尾巴拍打地面","碎碎念-发呆碎碎念","碎碎念-对屏碎碎念","碎碎念-擦桌碎碎念","穿针乞巧","舞狮头","荡秋千","萌化小幽灵","蓝鲸现世","蝴蝶蜜蜂环绕头顶开花","螃蟹走路","被吓一跳","被落叶淹没","被鼠标拖拽悬空反馈","装点圣诞树","讨糖南瓜灯","超大伸懒腰","踢毽子","轻快摇摆舞","轻快记录","骑木马","鲸鱼吐泡泡特效"];
+
+  var vid = document.getElementById('vid');
+  var cur = document.getElementById('cur');
+  var feed = document.getElementById('feed');
+
+  function setSrc(name, loop) {
+    if (vid.dataset.name !== name) {
+      vid.dataset.name = name;
+      vid.src = encodeURI('assets/anims/' + name + '.webm');
+    }
+    vid.loop = !!loop;
+    var p = vid.play();
+    if (p && p.catch) p.catch(function () {});
+  }
+  function play(name) {
+    cur.textContent = name;
+    if (name === IDLE) { setSrc(IDLE, true); return; }
+    setSrc(name, false);
+    vid.onended = function () { cur.textContent = IDLE; setSrc(IDLE, true); };
+    vid.onerror = function () { cur.textContent = IDLE; setSrc(IDLE, true); };
+  }
+
+  // 连网关
+  var hub = null, hubUp = false;
+  function setDot(id, on) { document.getElementById(id).classList.toggle('on', on); }
+  function connect() {
+    try { hub = new WebSocket('ws://127.0.0.1:8643/'); } catch (e) { return; }
+    hub.onopen = function () { hubUp = true; setDot('dot-hub', true); document.getElementById('warn').classList.remove('show'); };
+    hub.onclose = function () { hubUp = false; setDot('dot-hub', false); document.getElementById('warn').classList.add('show'); setTimeout(connect, 3000); };
+    hub.onerror = function () { try { hub.close(); } catch (e) {} };
+    hub.onmessage = function (ev) {
+      try {
+        var m = JSON.parse(ev.data);
+        if (m.type === 'status') {
+          setDot('dot-dm', !!m.danmaku);
+          if (m.popularity !== undefined) document.getElementById('pop').textContent = '人气 ' + m.popularity;
+          if (m.roomid) document.getElementById('roomid').textContent = '房间 ' + m.roomid;
+        } else if (m.type === 'action') {
+          play(m.name);
+          addFeed(m.user || '触发', m.text || m.name, m.name, '已触发');
+        } else if (m.type === 'danmaku') {
+          addFeed(m.user, m.text, m.action, m.state);
+        }
+      } catch (e) {}
+    };
+  }
+  connect();
+
+  function addFeed(user, text, action, state) {
+    if (feed.querySelector('.empty')) feed.innerHTML = '';
+    var row = document.createElement('div');
+    row.className = 'row' + (action && state === '已触发' ? ' hit' : '');
+    var html = '<span class="u"></span>';
+    row.innerHTML = html;
+    row.firstChild.textContent = user + '：';
+    row.appendChild(document.createTextNode(text));
+    if (action && state === '已触发') {
+      var a = document.createElement('span'); a.className = 'a'; a.textContent = '→ ' + action;
+      row.appendChild(a);
+    } else if (state === '冷却中') {
+      var c = document.createElement('span'); c.className = 'cd'; c.textContent = '（冷却中）';
+      row.appendChild(c);
+    }
+    feed.insertBefore(row, feed.firstChild);
+    while (feed.children.length > 40) feed.removeChild(feed.lastChild);
+  }
+
+  // 按钮
+  document.getElementById('btns').addEventListener('click', function (ev) {
+    var b = ev.target.closest('button');
+    if (!b) return;
+    if (b.dataset.k && hubUp) {
+      hub.send(JSON.stringify({ type: 'cmd', text: b.dataset.k }));
+    } else if (b.dataset.act === 'random') {
+      play(ALL[Math.floor(Math.random() * ALL.length)]);
+    } else if (b.dataset.act === 'wave') {
+      play(CLICKS[4]);
+    } else if (b.dataset.act === 'idle') {
+      play(IDLE);
+    } else if (b.dataset.k) {  // 网关未连时本地播放
+      play(b.dataset.k === '吃饭' ? '吃白饭' : b.dataset.k === '过年' ? '舞狮头' : b.dataset.k);
+    }
+  });
+
+  // 保活 + 启动
+  setInterval(function () { if (vid.paused && !vid.ended) { var p = vid.play(); if (p && p.catch) p.catch(function(){}); } }, 1500);
+  play(IDLE);
+})();
+</script>
+</body>
+</html>

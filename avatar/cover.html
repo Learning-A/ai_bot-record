@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>直播封面</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 1920px; height: 1080px; overflow: hidden; font-family: "Microsoft YaHei", "PingFang SC", sans-serif; }
+  body {
+    position: relative;
+    background:
+      radial-gradient(1200px 700px at 78% 42%, rgba(64,150,255,.35), transparent 65%),
+      radial-gradient(900px 600px at 20% 80%, rgba(35,173,229,.22), transparent 60%),
+      linear-gradient(160deg, #0b2047 0%, #0e2f66 45%, #0a1c3d 100%);
+  }
+  /* 光柱 */
+  .ray { position: absolute; top: -140px; width: 220px; height: 1400px;
+    background: linear-gradient(180deg, rgba(140,200,255,.30), rgba(140,200,255,0) 78%);
+    transform: rotate(16deg); transform-origin: top center; border-radius: 0 0 50% 50%; }
+  .ray.r1 { left: 1010px; opacity: .8; }
+  .ray.r2 { left: 1250px; opacity: .5; width: 150px; }
+  /* 气泡 */
+  .bubble { position: absolute; border-radius: 50%;
+    background: radial-gradient(circle at 32% 30%, rgba(255,255,255,.75), rgba(255,255,255,.13) 46%, rgba(255,255,255,.05) 70%);
+    border: 1px solid rgba(255,255,255,.35); }
+  /* 装饰性波浪底部 */
+  .wave { position: absolute; left: 0; right: 0; bottom: -6px; height: 190px; opacity: .35; }
+
+  .left { position: absolute; left: 110px; top: 250px; width: 920px; z-index: 5; }
+  .badge { display: inline-flex; align-items: center; gap: 12px; background: #fb7299;
+    color: #fff; font-size: 30px; font-weight: 700; letter-spacing: 4px;
+    padding: 12px 30px; border-radius: 999px; box-shadow: 0 6px 24px rgba(251,114,153,.55); }
+  .badge::before { content: "LIVE"; background: #fff; color: #fb7299; font-weight: 900;
+    font-size: 26px; padding: 2px 14px; border-radius: 999px; letter-spacing: 2px; }
+  h1 { margin-top: 34px; color: #fff; font-size: 150px; font-weight: 900; line-height: 1.12;
+    letter-spacing: 6px;
+    text-shadow: 0 6px 0 rgba(6,24,58,.9), 0 10px 34px rgba(0,0,0,.55), 0 0 70px rgba(64,150,255,.35);
+    -webkit-text-stroke: 3px #123c7a; }
+  h1 .hl { color: #ffd452; }
+  .sub { margin-top: 40px; display: flex; gap: 22px; }
+  .chip { background: rgba(255,255,255,.14); border: 2px solid rgba(255,255,255,.45);
+    backdrop-filter: blur(4px); color: #eaf4ff; font-size: 38px; font-weight: 700;
+    padding: 14px 34px; border-radius: 18px; letter-spacing: 3px; }
+  .host { position: absolute; left: 114px; bottom: 74px; z-index: 5;
+    color: rgba(234,244,255,.92); font-size: 34px; font-weight: 700; letter-spacing: 2px;
+    display: flex; align-items: center; gap: 16px; }
+  .host .dot { width: 16px; height: 16px; border-radius: 50%; background: #23ade5;
+    box-shadow: 0 0 18px #23ade5; }
+  .host b { color: #fff; }
+
+  .fish { position: absolute; right: 60px; bottom: 40px; width: 1020px; height: 574px;
+    z-index: 4; filter: drop-shadow(0 26px 44px rgba(0,10,30,.65)); }
+  .fish img { width: 100%; height: 100%; object-fit: contain; object-position: center bottom; }
+  .glowfish { position: absolute; right: 130px; bottom: 110px; width: 880px; height: 495px;
+    background: radial-gradient(closest-side, rgba(90,170,255,.34), transparent 72%); z-index: 3; }
+
+  /* 顶部小电视装饰 */
+  .tv { position: absolute; top: 64px; right: 96px; width: 118px; height: 88px;
+    background: #fb7299; border-radius: 26px; z-index: 6;
+    box-shadow: 0 10px 30px rgba(251,114,153,.5); }
+  .tv::before, .tv::after { content: ""; position: absolute; top: -26px; width: 10px; height: 30px;
+    background: #fb7299; border-radius: 5px; }
+  .tv::before { left: 26px; transform: rotate(-22deg); }
+  .tv::after { right: 26px; transform: rotate(22deg); }
+  .tv .face { position: absolute; inset: 0; margin: auto; width: 54px; height: 34px; }
+  .tv .eye { position: absolute; top: 2px; width: 12px; height: 16px; background: #fff; border-radius: 6px; }
+  .tv .eye.l { left: 4px; } .tv .eye.r { right: 4px; }
+  .tv .mouth { position: absolute; bottom: 0; left: 0; right: 0; margin: auto; width: 26px; height: 12px;
+    border: 5px solid #fff; border-top: none; border-radius: 0 0 26px 26px; }
+</style>
+</head>
+<body>
+  <div class="ray r1"></div><div class="ray r2"></div>
+  <div class="glowfish"></div>
+
+  <div class="left">
+    <div class="badge">大肥鱼摸鱼现场</div>
+    <h1>大肥鱼<span class="hl">直播间</span></h1>
+    <div class="sub">
+      <div class="chip">🍚 吃白饭</div>
+      <div class="chip">🐟 摸鱼</div>
+      <div class="chip">💻 写代码</div>
+    </div>
+  </div>
+
+  <div class="fish"><img id="fishimg" src="assets/anims/待机呼吸休闲.webm"></div>
+
+  <div class="host"><span class="dot"></span>主播&nbsp;<b>主播名</b>&nbsp;·&nbsp;每晚摸鱼开播</div>
+
+  <div class="tv"><div class="face"><div class="eye l"></div><div class="eye r"></div><div class="mouth"></div></div></div>
+
+<script>
+// 从待机动画抽中间帧作为主视觉（避开视频元素直接上封面）
+var v = document.createElement('video');
+v.src = encodeURI('assets/anims/待机呼吸休闲.webm');
+v.muted = true;
+v.addEventListener('loadeddata', function () {
+  v.currentTime = Math.min(v.duration * 0.5, v.duration - 0.05);
+});
+v.addEventListener('seeked', function () {
+  var c = document.createElement('canvas');
+  c.width = 640; c.height = 360;
+  c.getContext('2d').drawImage(v, 0, 0, 640, 360);
+  document.getElementById('fishimg').src = c.toDataURL('image/png');
+  window.__coverReady = true;
+});
+v.load();
+</script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+# 运行时产生的凭据/令牌（绝不入库）
+_danmu_token.json
+cookies.json
+*.log
+# 本地诊断产物
+*.png
+*.jpg
