@@ -2,6 +2,9 @@
 title QQ AI Bot Stopper
 echo === Stopping QQ AI Bot ===
 
+rem --- 0. set watchdog stop-flag FIRST so it won't resurrect the bot ---
+type nul > "%~dp0astrbot\WATCHDOG_STOP.flag" 2>nul
+
 rem --- 1. stop NapCat headless QQ (found via its WebUI port :6099) ---
 rem     NOTE: only kills the process listening on 6099 - your normal QQ
 rem     desktop client (opened manually) is NOT touched.
