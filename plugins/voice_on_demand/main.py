@@ -75,7 +75,7 @@ GSV_BY_PERSONA = {
         }},
     ],
 }
-FFMPEG = r"C:/Users/<你>\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-9.0.2-full_build\bin\ffmpeg.exe"
+FFMPEG = r"C:\Users\<你的Windows用户名>\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-9.0.2-full_build\bin\ffmpeg.exe"
 
 # 推理参数（用户定稿：原速+top_k默认15；满穗v2模型原速即4.0字/秒，变速会引入atempo电音）
 GSV_TOP_K = 15
@@ -85,6 +85,9 @@ GSV_SPEED = 1.0
 # 情绪化语音优先走它（情感参考可外挂任意情绪音频），失败落 GPT-SoVITS。
 ITTS_URL = "http://127.0.0.1:9885/tts"
 ITTS_TIMEOUT = 180
+# IndexTTS 情感参考强度：1.0 会让情绪参考片段的语调/音高完全主导（听感"换人"），
+# 0.6 为音色锚定与情绪表现的手调平衡点（A/B 实测：cheerful F0 摆动 ±62→±37Hz）
+ITTS_EMO_ALPHA = 0.6
 
 # 人格 → 音色引擎（gsv=IndexTTS/GPT-SoVITS 链；sf=SiliconFlow 云端克隆）
 PERSONA_VOICE = {
@@ -128,7 +131,9 @@ class VoiceOnDemand(Star):
             "text": text,
             "spk_audio": spk_ref,
             "emo_audio": emo_ref,   # None=不用情感参考（由音色参考自带情感）
-            "emo_alpha": 1.0,
+            # 情感强度：1.0=完全跟随情绪参考（语调/音高被带跑，听感像换人），
+            # 0.6=保留情绪起伏但音色锚定 calm 参考（实测 F0 摆动 ±62→±37Hz）
+            "emo_alpha": ITTS_EMO_ALPHA,
             "lang": "zh",
         }
         try:
@@ -269,7 +274,7 @@ class VoiceOnDemand(Star):
 
     @llm_tool(name="send_voice")
     async def send_voice(self, event: AstrMessageEvent, text: str, mood: str = "calm"):
-        """把这句话用语音消息发出去（就像真人发语音条）。两种情况使用：①用户明说要语音时**必须调用**——比如"发语音""用语音说""唱一句""语音撒娇""说给我听"等，不许只回文字；②你自己特别想用声音表达时（情绪浓烈、哼歌、撒娇、想安慰人）。平时正常打字即可。合成约需几秒到半分钟，调用后耐心等待结果，不要重试。文字请写成真的会说出口的话（带语气词、感叹，别书面化）。
+        """把这句话用语音消息发出去（就像真人发语音条）。两种情况使用：①用户明说要语音时**必须调用**——比如"发语音""用语音说""唱一句""语音撒娇""说给我听"等，不许只回文字；②你自己特别想用声音表达时（情绪浓烈、哼歌、撒娇、想安慰人）。平时正常打字即可。合成约需几秒到半分钟，调用后耐心等待结果，不要重试。**严禁口头承诺却不调用**——不许只回"等等哦/马上"这类文字然后结束回合；要么本轮立即调用本工具，要么明确文字拒绝。文字请写成真的会说出口的话（带语气词、感叹，别书面化）。
 
         Args:
             text(string): 要用语音说出的完整内容（口语化，一两句即可）
@@ -278,15 +283,15 @@ class VoiceOnDemand(Star):
         umo = event.unified_msg_origin
         text = text.strip()
         mood = (mood or "calm").strip().lower() or "calm"
-        persona = await self._current_persona(umo)
-        vcfg = PERSONA_VOICE.get(persona or "default") or {"engine": "sf"}
+        persona = (await self._current_persona(umo)) or "default"
+        vcfg = PERSONA_VOICE.get(persona) or {"engine": "sf"}
 
         mp3 = None
         if vcfg.get("engine") == "gsv":
             # 全量 IndexTTS 优先（用户定稿）；失败落 GSV，最后落 SiliconFlow
-            mp3 = await self._synth_itts(text, persona or "tangyuan", mood)
+            mp3 = await self._synth_itts(text, persona, mood)
             if mp3 is None:
-                mp3 = await self._synth_gsv(text, persona or "tangyuan", mood)
+                mp3 = await self._synth_gsv(text, persona, mood)
         if mp3 is None:
             # 云端路径（也作为 GSV 失败的回退）
             mp3 = await self._synth_mp3(umo, text)
