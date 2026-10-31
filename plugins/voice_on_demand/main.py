@@ -88,6 +88,9 @@ ITTS_TIMEOUT = 180
 # IndexTTS 情感参考强度：1.0 会让情绪参考片段的语调/音高完全主导（听感"换人"），
 # 0.6 为音色锚定与情绪表现的手调平衡点（A/B 实测：cheerful F0 摆动 ±62→±37Hz）
 ITTS_EMO_ALPHA = 0.6
+# 按 mood 的语速补偿（duration_factor>1 放慢）：情绪参考的语速也会被模仿——
+# 实测 cheerful 5.1~5.5字/秒 vs gentle/calm 4.6，快 11%+；1.12 拉回同一语速带
+ITTS_MOOD_DURATION = {"cheerful": 1.12}
 
 # 人格 → 音色引擎（gsv=IndexTTS/GPT-SoVITS 链；sf=SiliconFlow 云端克隆）
 PERSONA_VOICE = {
@@ -134,6 +137,8 @@ class VoiceOnDemand(Star):
             # 情感强度：1.0=完全跟随情绪参考（语调/音高被带跑，听感像换人），
             # 0.6=保留情绪起伏但音色锚定 calm 参考（实测 F0 摆动 ±62→±37Hz）
             "emo_alpha": ITTS_EMO_ALPHA,
+            # 语速补偿：情绪参考的语速同样会被模仿（cheerful 快 11%+），按档拉平
+            "duration_factor": ITTS_MOOD_DURATION.get(mood, 1.0),
             "lang": "zh",
         }
         try:
