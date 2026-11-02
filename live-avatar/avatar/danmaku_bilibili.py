@@ -234,7 +234,8 @@ def run_bili(link, args):
                             cmd = json.loads(body.decode("utf-8", "ignore"))
                         except Exception:
                             continue
-                        if str(cmd.get("cmd", "")).startswith("DANMU_MSG"):
+                        cmdname = str(cmd.get("cmd", ""))
+                        if cmdname.startswith("DANMU_MSG"):
                             info = cmd.get("info") or []
                             if len(info) > 2 and info[1]:
                                 user = str((info[2] or ["", "匿名"])[1] or "匿名")
@@ -245,6 +246,14 @@ def run_bili(link, args):
                                     link_fail += 1
                                     if link_fail > 10:
                                         raise RuntimeError("核心总线链路失效")
+                        elif cmdname == "INTERACT_WORD":
+                            d = cmd.get("data") or {}
+                            if d.get("msg_type") == 1 and d.get("uname"):
+                                link.send_safe({"type": "enter", "user": str(d["uname"])[:30]})
+                        elif cmdname == "ENTRY_EFFECT":
+                            d = cmd.get("data") or {}
+                            if d.get("uname"):
+                                link.send_safe({"type": "enter", "user": str(d["uname"])[:30], "vip": True})
             hb_stop.set()
         except Exception as e:
             print(f"[B站] 断开（{e}），{backoff}s 后重试", flush=True)

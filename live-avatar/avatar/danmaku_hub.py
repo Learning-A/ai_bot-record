@@ -18,6 +18,8 @@ from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 ROOT = os.path.dirname(os.path.abspath(__file__))
 HTTP_PORT, HUB_PORT = 8642, 8643
 COOLDOWN_SEC = 5.0
+GREETING_COOLDOWN = 8.0   # 进场打招呼冷却（秒）：人气高时防止连续挥手刷屏
+GREETING_ACTIONS = ["点击回应-元气挥手", "女仆屈膝礼仪", "点击回应-开心跃动"]
 
 ANIMS = ["三球抛接","下五子棋","东张西望","中秋赏月吃月饼","优雅女仆舞","余额-分文不剩","余额-数金皱眉","余额-袋空如洗","余额-金袋叮当","余额-钱袋如常","余额-钱袋满溢","偷吃零食被抓住","写代码","写福字","凭空生花","动物环绕","原地专心玩魔方","原地小憩沉眠","原地左转奔跑","原地敲击桌面互动","原地漂浮踏步","原地跳跃抓碎头顶物品","原地蹲下玩玩具汽车","原地重力下蹲压缩","变鸽子","可爱宅舞","吃Token","吃冰淇淋融化","吃午餐","吃大闸蟹","吃年糕","吃早餐","吃晚餐","吃汤圆","吃白饭","吃粽子","吃糖葫芦","吃腊八粥","吃西瓜","吃重阳糕","吃长寿面","吃青团","吃饺子","吹气球","吹笛子","哈欠连天","堆雪人","大口吃零食","女仆屈膝礼仪","小幅度原地360度旋转展示","小提琴演奏","工作状态-原地踱步张望","工作状态-垂头叹气冒汗","工作状态-忙碌点按","工作状态-思考冒泡","工作状态-清点归档","工作状态-雀跃庆祝","待机呼吸休闲","悠闲哼歌","扑克魔术","打瞌睡被惊醒","抽陀螺","拆礼物","插茱萸赏菊","摇扇纳凉","撸猫","收红包","放孔明灯","放河灯","放烟花","放风筝","整体换装试色","是啊，吃什么","晨间刷牙","涮火锅","深度思考碎碎念","点击回应-傲娇生气","点击回应-元气挥手","点击回应-害羞惊讶","点击回应-开心跃动","点击回应-挠痒咯咯笑","照镜子","玩水枪","玩游戏气急败坏","用鲸鱼尾巴拍打地面","碎碎念-发呆碎碎念","碎碎念-对屏碎碎念","碎碎念-擦桌碎碎念","穿针乞巧","舞狮头","荡秋千","萌化小幽灵","蓝鲸现世","蝴蝶蜜蜂环绕头顶开花","螃蟹走路","被吓一跳","被落叶淹没","被鼠标拖拽悬空反馈","装点圣诞树","讨糖南瓜灯","超大伸懒腰","踢毽子","轻快摇摆舞","轻快记录","骑木马","鲸鱼吐泡泡特效"]
 ANIM_SET = set(ANIMS)
@@ -196,6 +198,19 @@ def hub_handle(conn):
                     continue
                 ENGINE_Q.put({"user": msg.get("user", "匿名"),
                               "text": str(msg.get("text", ""))[:60], "manual": False})
+            elif t == "enter":                # 观众进场（弹幕适配器上报）
+                k = ("__enter__", msg.get("user", ""))
+                now = time.time()
+                with DUP_LOCK:
+                    if k in SEEN and now - SEEN[k] < 10:
+                        skip = True
+                    else:
+                        SEEN[k] = now
+                if skip:
+                    skip = False
+                    continue
+                ENGINE_Q.put({"kind": "enter", "user": msg.get("user", "匿名"),
+                              "vip": bool(msg.get("vip"))})
             elif t == "source_status":           # 适配器状态 → 转播给所有页面
                 source_state["online"] = bool(msg.get("online"))
                 if "popularity" in msg:
@@ -245,8 +260,25 @@ def match_action(text):
 
 def engine():
     last_trigger_ts = 0.0
+    last_greet_ts = 0.0
     while True:
         ev = ENGINE_Q.get()
+
+        if ev.get("kind") == "enter":      # 观众进场 → 打招呼
+            user, vip = ev["user"], ev.get("vip", False)
+            now = time.time()
+            if now - last_greet_ts < GREETING_COOLDOWN:
+                broadcast({"type": "danmaku", "user": user, "text": "进入了直播间" + ("（大航海）" if vip else ""),
+                           "action": "", "state": ""})
+                continue
+            last_greet_ts = now
+            action = random.choice(GREETING_ACTIONS)
+            print(f"[进场] {user} → {action}", flush=True)
+            broadcast({"type": "danmaku", "user": user, "text": "进入了直播间" + ("（大航海）" if vip else ""),
+                       "action": action, "state": "已触发"})
+            broadcast({"type": "action", "name": action, "text": "欢迎来到直播间", "user": user})
+            continue
+
         user, text, manual = ev["user"], ev["text"], ev["manual"]
         action = match_action(text)
         now = time.time()
