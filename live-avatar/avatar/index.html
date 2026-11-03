@@ -172,6 +172,20 @@
     };
   }
 
+  // 连招：按顺序播放一串动作（来自核心 COMBOS），中途被新动作打断
+  function playSequence(names) {
+    var list = names.slice();
+    (function step() {
+      if (!list.length) { toIdle(); return; }
+      var seq = ++oneShotSeq;
+      var name = list.shift();
+      oneShot = name;
+      setSrc(name, false);
+      vid.onended = function () { if (seq === oneShotSeq) step(); };
+      vid.onerror = function () { if (seq === oneShotSeq) step(); };
+    })();
+  }
+
   function performRandom() {
     if (oneShot || !pool.length) return;
     playOneShot(pool[Math.floor(Math.random() * pool.length)]);
@@ -239,9 +253,13 @@
     hub.onmessage = function (ev) {
       try {
         var m = JSON.parse(ev.data);
-        if (m.type === 'action' && ANIMS.indexOf(m.name) >= 0) {
+        if (m.type === 'action' && (ANIMS.indexOf(m.name) >= 0 || m.seq)) {
           lastShow = Date.now();
-          playOneShot(m.name, false);
+          if (m.seq) {
+            playSequence(m.seq.filter(function (n) { return ANIMS.indexOf(n) >= 0; }));
+          } else {
+            playOneShot(m.name, false);
+          }
           if (m.text) showBubble('「' + m.text + '」' + (m.user ? ' — ' + m.user : ''));
         }
       } catch (e) {}

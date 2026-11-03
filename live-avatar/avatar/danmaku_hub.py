@@ -73,6 +73,27 @@ ALIASES = {
     "刷牙": ["晨间刷牙"],
     "鲸鱼": ["蓝鲸现世"],
     "泡泡": ["鲸鱼吐泡泡特效"],
+    "拜年": ["拜年"],
+    "新年快乐": ["拜年"],
+    "干饭人": ["干饭人"],
+    "下班": ["下班了"],
+    "下班了": ["下班了"],
+    "谢幕": ["谢幕"],
+    "下播": ["谢幕"],
+    "开场秀": ["开场秀"],
+    "猫瘾发作": ["猫瘾发作"],
+    "过大年": ["过大年"],
+}
+
+# 组合动作（连招）：关键词触发时按顺序播放一串现有动作，无需新素材
+COMBOS = {
+    "拜年": ["点击回应-元气挥手", "收红包", "放烟花"],
+    "干饭人": ["吃白饭", "大口吃零食", "吃西瓜"],
+    "下班了": ["写代码", "超大伸懒腰", "原地小憩沉眠"],
+    "谢幕": ["女仆屈膝礼仪", "点击回应-元气挥手", "原地小憩沉眠"],
+    "开场秀": ["可爱宅舞", "放烟花", "工作状态-雀跃庆祝"],
+    "猫瘾发作": ["撸猫", "东张西望", "撸猫"],
+    "过大年": ["舞狮头", "收红包", "放烟花", "工作状态-雀跃庆祝"],
 }
 
 STRIP_CHARS = " \t\r\n!！?？。.,，、~～;；:："
@@ -288,19 +309,45 @@ def engine():
                            "action": action, "state": "冷却中"})
                 continue
             last_trigger_ts = now
-            print(f"[触发] {user} 「{text}」→ {action}", flush=True)
-            broadcast({"type": "danmaku", "user": user, "text": text,
-                       "action": action, "state": "已触发"})
-            broadcast({"type": "action", "name": action, "text": text, "user": user})
+            if action in COMBOS:
+                seq = COMBOS[action]
+                print(f"[触发] {user} 「{text}」→ 连招[{action}] {' → '.join(seq)}", flush=True)
+                broadcast({"type": "danmaku", "user": user, "text": text,
+                           "action": action + "（连招）", "state": "已触发"})
+                broadcast({"type": "action", "name": action, "seq": seq, "text": text, "user": user})
+            else:
+                print(f"[触发] {user} 「{text}」→ {action}", flush=True)
+                broadcast({"type": "danmaku", "user": user, "text": text,
+                           "action": action, "state": "已触发"})
+                broadcast({"type": "action", "name": action, "text": text, "user": user})
         else:
             broadcast({"type": "danmaku", "user": user, "text": text,
                        "action": "", "state": ""})
 
 
 # ---------------------------------------------------------------- HTTP 静态服务
+class StatusAwareHandler(SimpleHTTPRequestHandler):
+    """/api/status 返回弹幕源在线状态，其余走静态文件。供启动脚本健康检查。"""
+
+    def do_GET(self):
+        if self.path.split("?")[0] == "/api/status":
+            body = json.dumps({
+                "danmaku_online": bool(source_state["online"]),
+                "popularity": source_state.get("popularity", 0),
+                "roomid": source_state.get("roomid"),
+            }, ensure_ascii=False).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+        super().do_GET()
+
+
 def http_server():
     os.chdir(ROOT)
-    Handler = SimpleHTTPRequestHandler
+    Handler = StatusAwareHandler
     Handler.log_message = lambda *a, **k: None
     srv = ThreadingHTTPServer(("127.0.0.1", HTTP_PORT), Handler)
     print(f"[http] http://127.0.0.1:{HTTP_PORT} 静态服务就绪", flush=True)

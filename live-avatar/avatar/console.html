@@ -127,6 +127,18 @@
     vid.onerror = function () { cur.textContent = IDLE; setSrc(IDLE, true); };
   }
 
+  function playSequence(names) {
+    var list = names.slice();
+    (function step() {
+      if (!list.length) { play(IDLE); return; }
+      var name = list.shift();
+      cur.textContent = name + (list.length ? '（连招中…）' : '');
+      setSrc(name, false);
+      vid.onended = step;
+      vid.onerror = step;
+    })();
+  }
+
   // 连网关
   var hub = null, hubUp = false;
   function setDot(id, on) { document.getElementById(id).classList.toggle('on', on); }
@@ -143,8 +155,9 @@
           if (m.popularity !== undefined) document.getElementById('pop').textContent = '人气 ' + m.popularity;
           if (m.roomid) document.getElementById('roomid').textContent = '房间 ' + m.roomid;
         } else if (m.type === 'action') {
-          play(m.name);
-          addFeed(m.user || '触发', m.text || m.name, m.name, '已触发');
+          if (m.seq) playSequence(m.seq);
+          else play(m.name);
+          addFeed(m.user || '触发', m.text || m.name, m.name + (m.seq ? '（连招）' : ''), '已触发');
         } else if (m.type === 'danmaku') {
           addFeed(m.user, m.text, m.action, m.state);
         }
