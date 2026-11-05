@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>大肥鱼点歌台</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+    background: linear-gradient(160deg, #101a30 0%, #0b1222 100%);
+    color: #eaf2ff; display: flex; flex-direction: column; overflow: hidden;
+  }
+  header {
+    display: flex; align-items: center; gap: 10px; padding: 10px 16px;
+    background: rgba(255,255,255,.05); border-bottom: 1px solid rgba(255,255,255,.1);
+    font-size: 14px;
+  }
+  header b { font-size: 16px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: #e05a5a; transition: background .3s; }
+  .dot.on { background: #3ecf6e; box-shadow: 0 0 8px #3ecf6e; }
+  .mode { margin-left: auto; color: #9fb4d8; font-size: 12px; }
+  .mode b { color: #ffd452; font-size: 12px; }
+
+  .main { flex: 1; display: flex; min-height: 0; }
+  .player-side {
+    flex: 1.6; display: flex; flex-direction: column; padding: 14px; min-width: 0;
+  }
+  #player {
+    flex: 1; width: 100%; border-radius: 12px; overflow: hidden; background: #000;
+    border: 1px solid rgba(255,255,255,.12); position: relative;
+  }
+  #player iframe { width: 100%; height: 100%; border: 0; }
+  #player .empty {
+    position: absolute; inset: 0; display: flex; flex-direction: column; gap: 8px;
+    align-items: center; justify-content: center; color: #6c7a94; font-size: 15px;
+  }
+  .now { padding: 10px 4px 2px; font-size: 14px; color: #9fb4d8; }
+  .now b { color: #ffd452; display: inline-block; max-width: 46em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
+
+  .queue-side {
+    flex: 1; min-width: 300px; max-width: 420px; display: flex; flex-direction: column;
+    border-left: 1px solid rgba(255,255,255,.1);
+  }
+  .q-head {
+    display: flex; align-items: center; padding: 12px 14px 6px; font-size: 13px; color: #9fb4d8;
+  }
+  .q-head .n { margin-left: 6px; color: #23ade5; font-weight: 700; }
+  .q-head button {
+    margin-left: auto; font-size: 12px; padding: 5px 12px; border-radius: 8px; cursor: pointer;
+    background: rgba(255,255,255,.09); color: #eaf2ff; border: 1px solid rgba(255,255,255,.22);
+  }
+  .q-head button:hover { background: #e05a5a; border-color: #e05a5a; }
+  #queue { flex: 1; overflow-y: auto; padding: 4px 14px 14px; font-size: 14px; }
+  #queue .row {
+    display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 10px;
+    margin-bottom: 4px; background: rgba(255,255,255,.05); color: #cdd9ee;
+  }
+  #queue .row.playing { background: rgba(251,114,153,.2); color: #fff; }
+  #queue .row .idx { color: #23ade5; font-weight: 700; width: 20px; }
+  #queue .row .t { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #queue .row .u { color: #8a93a8; font-size: 12px; }
+  #queue .row .skip {
+    font-size: 12px; padding: 3px 10px; border-radius: 6px; cursor: pointer;
+    background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.2); color: #eaf2ff;
+  }
+  #queue .row .skip:hover { background: #23ade5; }
+  .empty-q { color: #6c7a94; padding: 14px; font-size: 13px; }
+
+  /* 首次点击解锁层（浏览器音频自动播放策略） */
+  #unlock {
+    position: fixed; inset: 0; z-index: 99; display: flex; flex-direction: column; gap: 14px;
+    align-items: center; justify-content: center; background: rgba(8,14,28,.92); cursor: pointer;
+  }
+  #unlock .big { font-size: 26px; font-weight: 900; color: #ffd452; }
+  #unlock .tip { font-size: 14px; color: #9fb4d8; max-width: 30em; text-align: center; line-height: 1.7; }
+  #unlock.hide { display: none; }
+</style>
+</head>
+<body>
+<header>
+  <b>🎤 大肥鱼点歌台</b>
+  <span class="dot" id="dot"></span><span style="color:#9fb4d8">核心总线</span>
+  <span class="mode">模式：<b id="mode">待命</b></span>
+</header>
+
+<div id="unlock">
+  <div class="big">▶ 点一下，开启点歌台</div>
+  <div class="tip">首次点击用于解锁浏览器的音频自动播放权限。<br>
+  开着本页面时，弹幕点歌会在这里自动播放并排队（B 模式）；<br>
+  关掉本页面，系统自动退回"浏览器开新标签"模式（A 模式）。</div>
+</div>
+
+<div class="main">
+  <div class="player-side">
+    <div id="player">
+      <iframe id="pf" allow="autoplay; encrypted-media" style="display:none"></iframe>
+      <div class="empty" id="pempty">🎵 等待点歌…<span style="font-size:12px">弹幕发送「点歌 歌名」试试</span></div>
+    </div>
+    <div class="now">当前播放：<b id="cur">—</b></div>
+  </div>
+  <div class="queue-side">
+    <div class="q-head">队列<span class="n" id="qn">0</span>
+      <button id="clear">清空队列</button>
+    </div>
+    <div id="queue"><div class="empty-q">还没有人点歌</div></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var pf = document.getElementById('pf');
+  var pempty = document.getElementById('pempty');
+  var cur = document.getElementById('cur');
+  var queueEl = document.getElementById('queue');
+  var qn = document.getElementById('qn');
+  var modeEl = document.getElementById('mode');
+
+  var queue = [];          // [{bvid,title,user,duration}]
+  var playing = null;
+  var endTimer = null;
+  var unlocked = false;
+  var hub = null;
+
+  function setDot(on) { document.getElementById('dot').classList.toggle('on', on); }
+
+  function send(obj) {
+    if (hub && hub.readyState === 1) hub.send(JSON.stringify(obj));
+  }
+  function hello() { send({ type: 'relay', data: { type: 'jukebox_hello' } }); }
+
+  // ---------------- 播放控制 ----------------
+  function play(song) {
+    playing = song;
+    cur.textContent = song.title + '（' + song.user + ' 点播）';
+    pempty.style.display = 'none';
+    pf.style.display = 'block';
+    pf.src = 'https://player.bilibili.com/player.html?bvid=' + song.bvid +
+             '&autoplay=1&danmaku=0&high_quality=1&autostart=true';
+    modeEl.textContent = '播放中';
+    clearTimeout(endTimer);
+    // B 站 iframe 拿不到播放结束事件，用搜索得到的时长 + 缓冲来定时切歌
+    endTimer = setTimeout(next, (song.duration + 8) * 1000);
+    renderQueue();
+  }
+
+  function next() {
+    if (queue.length) {
+      play(queue.shift());
+    } else {
+      playing = null;
+      cur.textContent = '—';
+      pf.style.display = 'none';
+      pempty.style.display = 'flex';
+      modeEl.textContent = '待命';
+      clearTimeout(endTimer);
+    }
+    renderQueue();
+  }
+
+  function enqueue(song) {
+    if (queue.length >= 20) return;
+    queue.push(song);
+    renderQueue();
+    if (!playing && unlocked) play(queue.shift());
+    else if (!playing && !unlocked) {
+      // 未解锁时也先弹出来，等用户点击后播
+      document.getElementById('unlock').classList.remove('hide');
+    }
+  }
+
+  function renderQueue() {
+    qn.textContent = queue.length;
+    if (!queue.length && !playing) {
+      queueEl.innerHTML = '<div class="empty-q">还没有人点歌</div>';
+      return;
+    }
+    var html = '';
+    if (playing) {
+      html += '<div class="row playing"><span class="idx">▶</span><span class="t">' +
+              esc(playing.title) + '</span><span class="u">' + esc(playing.user) + '</span>' +
+              '<button class="skip">跳过</button></div>';
+    }
+    queue.forEach(function (s, i) {
+      html += '<div class="row"><span class="idx">' + (i + 1) + '</span><span class="t">' +
+              esc(s.title) + '</span><span class="u">' + esc(s.user) + '</span>' +
+              '<button class="skip">跳过</button></div>';
+    });
+    queueEl.innerHTML = html;
+  }
+
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  queueEl.addEventListener('click', function (ev) {
+    if (!ev.target.classList.contains('skip')) return;
+    var rows = Array.prototype.slice.call(queueEl.querySelectorAll('.row'));
+    var idx = rows.indexOf(ev.target.closest('.row'));
+    if (idx < 0) return;
+    if (playing && idx === 0) { next(); }
+    else {
+      var adj = playing ? idx - 1 : idx;
+      if (adj >= 0 && adj < queue.length) { queue.splice(adj, 1); renderQueue(); }
+    }
+  });
+  document.getElementById('clear').onclick = function () { queue = []; renderQueue(); };
+
+  // ---------------- 解锁层 ----------------
+  document.getElementById('unlock').addEventListener('click', function () {
+    unlocked = true;
+    this.classList.add('hide');
+    hello();
+    if (!playing && queue.length) play(queue.shift());
+  });
+
+  // ---------------- 总线 ----------------
+  var hubPort = '8643';
+  try {
+    var qp = new URLSearchParams(location.search).get('hub');
+    if (qp) hubPort = qp;
+  } catch (e) {}
+  function connect() {
+    try { hub = new WebSocket('ws://127.0.0.1:' + hubPort + '/'); } catch (e) { return; }
+    hub.onopen = function () { setDot(true); hello(); setInterval(hello, 30000); };
+    hub.onmessage = function (ev) {
+      try {
+        var m = JSON.parse(ev.data);
+        if (m.type === 'song' && m.bvid) {
+          enqueue({ bvid: m.bvid, title: m.title || m.bvid, user: m.user || '观众', duration: m.duration || 240 });
+        }
+      } catch (e) {}
+    };
+    hub.onclose = function () { setDot(false); setTimeout(connect, 3000); };
+    hub.onerror = function () { try { hub.close(); } catch (e) {} };
+  }
+  connect();
+  renderQueue();
+})();
+</script>
+</body>
+</html>

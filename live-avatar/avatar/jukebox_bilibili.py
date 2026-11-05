@@ -11,6 +11,10 @@
 点歌规则：弹幕/cmd 文本以「点歌」开头；全局冷却 SONG_COOLDOWN 秒；
 时长超过 MAX_DURATION 的结果跳过；搜不到时在弹幕流提示。
 
+B 模式（点歌台页面在线时自动启用）：jukebox.html 通过 relay 心跳宣告存在，
+本适配器便不再开浏览器标签，而是广播 {"type":"song",...} 由点歌台内嵌播放器播放；
+点歌台页面关闭后心跳超时，自动退回 A 模式（开浏览器标签）。
+
 用法：
   python jukebox_bilibili.py                # 正常模式
   python jukebox_bilibili.py --smoke        # 冒烟模式：只搜索和广播，不真开浏览器
@@ -166,6 +170,7 @@ class HubLink:
 
 def run(args):
     cookie, img, sub = load_credentials()
+    state = {"jukebox_page_ts": 0.0}   # 点歌台页面最近一次心跳时间
     print("[点歌] 凭据已加载" + ("（冒烟模式：不会真的打开浏览器）" if args.smoke else ""), flush=True)
     while True:
         link = HubLink(("127.0.0.1", args.hub_port))
@@ -175,7 +180,13 @@ def run(args):
             print(f"[点歌] 已接入事件总线 :{args.hub_port}，等待「{SONG_PREFIX} 歌名」…", flush=True)
             while True:
                 msg = link.recv_msg()
-                if msg.get("type") != "danmaku":
+                mtype = msg.get("type")
+                if mtype == "jukebox_hello":      # 核心转发 relay 时已解包，收到的是原始消息
+                    if time.time() - state["jukebox_page_ts"] > 25:
+                        print("[点歌] 点歌台页面在线 → B 模式（不再开浏览器标签）", flush=True)
+                    state["jukebox_page_ts"] = time.time()
+                    continue
+                if mtype != "danmaku":
                     continue
                 text = str(msg.get("text", "")).strip()
                 m = re.match("^" + SONG_PREFIX + r"\s*(.+)$", text)
@@ -206,8 +217,14 @@ def run(args):
                 link.send_safe({"type": "relay", "data": {"type": "action",
                                                         "name": random.choice(SONG_ACTIONS),
                                                         "text": "♪ 即将播放：" + title, "user": user}})
+                link.send_safe({"type": "relay", "data": {"type": "song", "bvid": bvid,
+                                                        "title": title, "user": user,
+                                                        "duration": dur, "url": url}})
+                page_online = time.time() - state["jukebox_page_ts"] < 70
                 if args.smoke:
-                    print(f"[点歌][SMOKE] 若为正式模式将打开: {url}", flush=True)
+                    print(f"[点歌][SMOKE] song事件已广播；{'点歌台在线(B模式)' if page_online else '点歌台离线，将开浏览器(A模式)'}: {url}", flush=True)
+                elif page_online:
+                    print(f"[点歌] 点歌台在线，交给页面播放: {url}", flush=True)
                 else:
                     import webbrowser
                     webbrowser.open(url)
