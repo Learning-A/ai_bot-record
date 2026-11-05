@@ -80,6 +80,12 @@ def search_song(keyword, cookie, img_key, sub_key):
     #   3) 标题含舞蹈/教学/游戏等词的降权，时长越接近 4 分钟越好
     BAD_TITLE = ("舞蹈", "翻跳", "试跳", "教程", "教学", "混剪", "游戏", "实况",
                  "切片", "直播回放", "综艺", "访谈", "手书", "AMV", "MAD")
+    # 版本偏好：录音棚版 > 现场版；原唱 > 翻唱
+    LIVE_WORDS = ("现场", "LIVE", "演唱会", "巡演", "音乐节", "直拍", "舞台", "纯享", "TOUR")
+    STUDIO_WORDS = ("录音棚", "HI-RES", "无损", "MV", "专辑", "STUDIO")
+    COVER_WORDS = ("翻唱", "COVER", "串烧", "填词", "改编", "钢琴版", "吉他版", "空耳", "男生版", "女生版")
+    # 点歌带歌手名（如"大鱼 周深"）时，标题含歌手名 = 原唱强信号
+    hints = [seg for seg in keyword.split() if seg][1:]
     def rank(r, pos):
         title = clean_title(r.get("title"))
         dur = parse_duration(r.get("duration"))
@@ -89,12 +95,20 @@ def search_song(keyword, cookie, img_key, sub_key):
         # 音乐区判定：分区名含"音乐"，或本身就是 MV 分区（实测 B 站该分区名就叫"MV"）
         is_music = ("音乐" in tname) or (tname == "MV")
         has_kw = keyword.lower() in title.lower()
-        bad = any(w in title.upper() for w in BAD_TITLE)
+        up = title.upper()
+        bad = any(w in up for w in BAD_TITLE)
+        live = any(w in up for w in LIVE_WORDS)
+        studio = (not live) and any(w in up for w in STUDIO_WORDS)
+        cover = any(w in up for w in COVER_WORDS)
+        artist_miss = 1 if (hints and not any(h in title for h in hints)) else 0
         # 最终排序用 B 站综合位次（相关性），时长只做准入过滤不参与打分
         return (0 if (is_music and has_kw) else 1,
                 0 if is_music else 1,
                 0 if has_kw else 1,
                 1 if bad else 0,
+                0 if studio else 1,      # 录音棚/无损/MV 优先于现场版
+                artist_miss,             # 标题含点歌指定的歌手（原唱信号）
+                1 if cover else 0,       # 翻唱/串烧降权
                 pos)
     best, best_key = None, None
     for pos, r in enumerate(results):
