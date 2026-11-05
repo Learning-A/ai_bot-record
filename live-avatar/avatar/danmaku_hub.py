@@ -232,6 +232,10 @@ def hub_handle(conn):
                     continue
                 ENGINE_Q.put({"kind": "enter", "user": msg.get("user", "匿名"),
                               "vip": bool(msg.get("vip"))})
+            elif t == "relay":               # 适配器中继：向所有客户端原样广播 data（如点歌动作）
+                data = msg.get("data")
+                if isinstance(data, dict):
+                    broadcast(data)
             elif t == "source_status":           # 适配器状态 → 转播给所有页面
                 source_state["online"] = bool(msg.get("online"))
                 if "popularity" in msg:

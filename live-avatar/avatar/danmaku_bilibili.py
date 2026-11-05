@@ -57,6 +57,7 @@ class HubLink:
             resp += chunk
         if b"101" not in resp.split(b"\r\n")[0]:
             raise ConnectionError("hub upgrade failed")
+        self.sock.settimeout(None)  # 连接建立后取消超时：空闲不再误判断线
         self.buf = resp.split(b"\r\n\r\n", 1)[1]
         print("[hub] 已接入核心事件总线", flush=True)
 
@@ -256,6 +257,11 @@ def run_bili(link, args):
                                 link.send_safe({"type": "enter", "user": str(d["uname"])[:30], "vip": True})
             hb_stop.set()
         except Exception as e:
+            msg = str(e)
+            cred_err = any(k in msg for k in ("缺少房间号", "未取到弹幕 token", "auth rejected", "认证被拒"))
+            if cred_err:
+                backoff = 15      # 凭据问题（未登录 Hime/cookie 失效）快速重试，
+                                  # 登录后 15s 内自动接上；网络问题才指数退避
             print(f"[B站] 断开（{e}），{backoff}s 后重试", flush=True)
             link.send_safe({"type": "source_status", "online": False})
         finally:

@@ -92,6 +92,7 @@
       <button data-act="wave">👋 挥手</button>
       <button data-act="idle">💤 回待机</button>
       <button data-k="过年">🧧 过年</button>
+      <button data-song="1">🎵 点歌</button>
     </div>
     <div class="feed-title">实时弹幕（关键词触发动作会高亮）——观众试试发：吃饭 / 跳舞 / 烟花 / 睡觉 / 写代码 / 摸鱼</div>
     <div id="feed"><div class="empty">等待弹幕…</div></div>
@@ -197,6 +198,9 @@
       play(CLICKS[4]);
     } else if (b.dataset.act === 'idle') {
       play(IDLE);
+    } else if (b.dataset.song) {
+      var name = prompt('要点播的歌名（B站搜索）：');
+      if (name && name.trim()) hub.send(JSON.stringify({ type: 'cmd', text: '点歌 ' + name.trim() }));
     } else if (b.dataset.k) {  // 网关未连时本地播放
       play(b.dataset.k === '吃饭' ? '吃白饭' : b.dataset.k === '过年' ? '舞狮头' : b.dataset.k);
     }

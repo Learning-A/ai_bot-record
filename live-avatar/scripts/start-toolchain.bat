@@ -9,10 +9,10 @@ set "AVATARDIR=%~dp0..\avatar"
 rem ---------- 1. core hub ----------
 netstat -ano | findstr ":8643" | findstr "LISTENING" >nul 2>&1
 if not errorlevel 1 (
-    echo [1/4] core hub ............ already running [OK]
+    echo [1/5] core hub ............ already running [OK]
     goto :step2
 )
-echo [1/4] starting core hub...
+echo [1/5] starting core hub...
 start "danmaku-hub" /min python -u "%AVATARDIR%\danmaku_hub.py"
 set /a tries=0
 :waitport
@@ -21,33 +21,64 @@ netstat -ano | findstr ":8643" | findstr "LISTENING" >nul 2>&1
 if not errorlevel 1 goto :hubok
 set /a tries+=1
 if %tries% lss 15 goto :waitport
-echo [1/4] core hub ............ FAILED to listen on 8643 [XX]
+echo [1/5] core hub ............ FAILED to listen on 8643 [XX]
 echo        run manually to see the error:  python -u "%AVATARDIR%\danmaku_hub.py"
 goto :step2
 :hubok
-echo [1/4] core hub ............ started [OK]
+echo [1/5] core hub ............ started [OK]
 
 :step2
-rem ---------- 2. danmaku adapter (detect by command line, not window title) ----------
-powershell -NoProfile -Command "if (@(Get-CimInstance Win32_Process -Filter \"Name='python.exe'\" | Where-Object {$_.CommandLine -match 'danmaku_bilibili'}).Count -eq 0) { exit 1 }" >nul 2>&1
-if errorlevel 1 (
-    echo [2/4] starting danmaku adapter ^(bilibili^)...
-    start "danmaku-bilibili" /min python -u "%AVATARDIR%\danmaku_bilibili.py"
-    "%SystemRoot%\System32\timeout.exe" /t 4 /nobreak >nul
-    powershell -NoProfile -Command "if (@(Get-CimInstance Win32_Process -Filter \"Name='python.exe'\" | Where-Object {$_.CommandLine -match 'danmaku_bilibili'}).Count -eq 0) { exit 1 }" >nul 2>&1
-    if errorlevel 1 (
-        echo [2/4] danmaku adapter ... FAILED to start [XX]
-        echo        run manually to see the error:  python -u "%AVATARDIR%\danmaku_bilibili.py"
-    ) else (
-        echo [2/4] danmaku adapter ... started [OK]
-    )
-) else (
-    echo [2/4] danmaku adapter ... already running [OK]
+rem ---------- 2. danmaku adapter (HEALTH-AWARE: ask the hub, not just process) ----------
+rem A running process does NOT mean the source is online (a stale adapter can sit
+rem with expired creds forever). The hub's /api/status is the source of truth.
+rem If offline: start adapter, poll up to 39s; still offline: kill all adapters
+rem and restart once (picks up fresh Bili Live Hime credentials), poll 30s more.
+powershell -NoProfile -Command "try{ (Invoke-WebRequest -Uri 'http://127.0.0.1:8642/api/status' -UseBasicParsing -TimeoutSec 3).Content -match '\"danmaku_online\": true' }catch{ exit 1 }" >nul 2>&1
+if not errorlevel 1 (
+    echo [2/5] danmaku adapter ... ONLINE [OK]
+    goto :step3
 )
+echo [2/5] danmaku adapter offline or absent, starting...
+start "danmaku-bilibili" /min python -u "%AVATARDIR%\danmaku_bilibili.py"
+set /a tries=0
+:dmwait
+"%SystemRoot%\System32\timeout.exe" /t 3 /nobreak >nul
+set /a tries+=1
+powershell -NoProfile -Command "try{ (Invoke-WebRequest -Uri 'http://127.0.0.1:8642/api/status' -UseBasicParsing -TimeoutSec 3).Content -match '\"danmaku_online\": true' }catch{ exit 1 }" >nul 2>&1
+if not errorlevel 1 goto :dmok
+if %tries% lss 13 goto :dmwait
+echo [2/5] still offline after 39s, killing stale adapter and retrying once...
+powershell -NoProfile -Command "Get-CimInstance Win32_Process -Filter \"Name='python.exe'\" | Where-Object {$_.CommandLine -match 'danmaku_bilibili'} | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }" >nul 2>&1
+"%SystemRoot%\System32\timeout.exe" /t 2 /nobreak >nul
+start "danmaku-bilibili" /min python -u "%AVATARDIR%\danmaku_bilibili.py"
+set /a tries=0
+:dmwait2
+"%SystemRoot%\System32\timeout.exe" /t 3 /nobreak >nul
+set /a tries+=1
+powershell -NoProfile -Command "try{ (Invoke-WebRequest -Uri 'http://127.0.0.1:8642/api/status' -UseBasicParsing -TimeoutSec 3).Content -match '\"danmaku_online\": true' }catch{ exit 1 }" >nul 2>&1
+if not errorlevel 1 goto :dmok
+if %tries% lss 10 goto :dmwait2
+echo [2/5] danmaku adapter ... STILL OFFLINE [XX]
+echo        checklist:
+echo        1. Bili Live Hime installed AND logged in today?
+echo        2. run manually to see the error:  python -u "%AVATARDIR%\danmaku_bilibili.py"
+goto :step3
+:dmok
+echo [2/5] danmaku adapter ... ONLINE [OK]
 
 :step3
-rem ---------- 3. console (wait for http 200, then open; fallback to default browser) ----------
-echo [3/4] opening console...
+rem ---------- 3. jukebox (danmaku song requests) ----------
+powershell -NoProfile -Command "if (@(Get-CimInstance Win32_Process -Filter \"Name='python.exe'\" | Where-Object {$_.CommandLine -match 'jukebox_bilibili'}).Count -eq 0) { exit 1 }" >nul 2>&1
+if errorlevel 1 (
+    echo [3/5] starting jukebox adapter ^(song requests^)...
+    start "jukebox-bilibili" /min python -u "%AVATARDIR%\jukebox_bilibili.py"
+    "%SystemRoot%\System32\timeout.exe" /t 3 /nobreak >nul
+) else (
+    echo [3/5] jukebox ............ already running [OK]
+)
+
+rem ---------- 4. console (wait for http 200, then open; fallback to default browser) ----------
+echo [4/5] opening console...
 powershell -NoProfile -Command "$ok=$false; for($i=0;$i -lt 15;$i++){ try{ $r=Invoke-WebRequest -Uri 'http://127.0.0.1:8642/console.html' -UseBasicParsing -TimeoutSec 2; if($r.StatusCode -eq 200){$ok=$true; break} }catch{ Start-Sleep 1 } }; if(-not $ok){ exit 1 }" >nul 2>&1
 if errorlevel 1 (
     echo [3/4] console ............. NOT reachable on :8642 [XX]
@@ -58,17 +89,29 @@ if errorlevel 1 start "" http://127.0.0.1:8642/console.html
 echo [3/4] console ............. opened [OK]
 
 :step4
-rem ---------- 4. streaming software (EDIT ME: OBS by default) ----------
+rem ---------- 5. streaming software (start + verify the process came up) ----------
+tasklist /FI "IMAGENAME eq obs64.exe" 2>nul | findstr /I obs64 >nul
+if not errorlevel 1 (
+    echo [5/5] OBS ............... already running [OK]
+    goto :done
+)
+echo [5/5] starting OBS...
+start "" "C:\Program Files\obs-studio\bin\64bit\obs64.exe"
+"%SystemRoot%\System32\timeout.exe" /t 5 /nobreak >nul
 tasklist /FI "IMAGENAME eq obs64.exe" 2>nul | findstr /I obs64 >nul
 if errorlevel 1 (
-    echo [4/4] starting OBS...
-    start "" "C:\Program Files\obs-studio\bin\64bit\obs64.exe"
+    echo [5/5] OBS ............... FAILED to start [XX]
+    echo        check install path: C:\Program Files\obs-studio\bin\64bit\obs64.exe
 ) else (
-    echo [4/4] OBS ............... already running [OK]
+    echo [5/5] OBS ............... started [OK]
 )
 
+:done
 echo.
 echo ============================================
+echo  Final danmaku source state:
+powershell -NoProfile -Command "try{ Write-Host ('  ' + (Invoke-WebRequest -Uri 'http://127.0.0.1:8642/api/status' -UseBasicParsing -TimeoutSec 3).Content) }catch{ Write-Host '  /api/status unreachable' }"
+echo.
 echo  Go live: streaming app "Start Live" + fresh key,
 echo  then "Start Streaming" and MINIMIZE the app.
 echo  Console should show TWO GREEN dots.
