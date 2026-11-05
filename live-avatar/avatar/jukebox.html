@@ -136,8 +136,9 @@
     cur.textContent = song.title + '（' + song.user + ' 点播）';
     pempty.style.display = 'none';
     pf.style.display = 'block';
+    // _r 时间戳：连续播同一首歌时 src 变化强制重载 iframe（否则不重载、看似连播失效）
     pf.src = 'https://player.bilibili.com/player.html?bvid=' + song.bvid +
-             '&autoplay=1&danmaku=0&high_quality=1&autostart=true';
+             '&autoplay=1&danmaku=0&high_quality=1&_r=' + Date.now();
     modeEl.textContent = '播放中';
     clearTimeout(endTimer);
     // B 站 iframe 拿不到播放结束事件，用搜索得到的时长 + 缓冲来定时切歌
@@ -161,6 +162,9 @@
 
   function enqueue(song) {
     if (queue.length >= 20) return;
+    // 同一首歌已在播放或已在队列：不重复入队
+    if ((playing && playing.bvid === song.bvid) ||
+        queue.some(function (s) { return s.bvid === song.bvid; })) return;
     queue.push(song);
     renderQueue();
     if (!playing && unlocked) play(queue.shift());

@@ -74,14 +74,26 @@ def search_song(keyword, cookie, img_key, sub_key):
     if data.get("code") != 0:
         raise RuntimeError("搜索接口返回 %s %s" % (data.get("code"), data.get("message")))
     results = (data.get("data") or {}).get("result") or []
-    # 优先：标题包含关键词；其次按时长兜底
+    # 选片规则（点歌台只放能听的音乐视频）：
+    #   1) 音乐分区 且 标题含歌名 最优；其次音乐分区；再其次标题含歌名
+    #   2) 时长窗口 1~10 分钟（太短多是切片/预告，太长是合集/电台）
+    #   3) 标题含舞蹈/教学/游戏等词的降权，时长越接近 4 分钟越好
+    BAD_TITLE = ("舞蹈", "翻跳", "试跳", "教程", "教学", "混剪", "游戏", "实况",
+                 "切片", "直播回放", "综艺", "访谈", "手书", "AMV", "MAD")
     def rank(r):
         title = clean_title(r.get("title"))
         dur = parse_duration(r.get("duration"))
-        if dur > MAX_DURATION:
+        if dur > MAX_DURATION or dur < 60:
             return None
+        tname = str(r.get("typename") or "")
+        is_music = "音乐" in tname
         has_kw = keyword.lower() in title.lower()
-        return (0 if has_kw else 1, abs(dur - 240))  # 关键词命中优先，时长接近4分钟优先
+        bad = any(w in title.upper() for w in BAD_TITLE)
+        return (0 if (is_music and has_kw) else 1,
+                0 if is_music else 1,
+                0 if has_kw else 1,
+                1 if bad else 0,
+                abs(dur - 240))
     best, best_key = None, None
     for r in results:
         k = rank(r)
