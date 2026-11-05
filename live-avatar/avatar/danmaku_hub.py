@@ -126,7 +126,10 @@ class HubClient:
 
     def _need(self, n):
         while len(self.buf) < n:
-            chunk = self.sock.recv(65536)
+            try:
+                chunk = self.sock.recv(65536)
+            except socket.timeout:
+                continue  # 空闲等待（有全局超时兜底僵尸连接），不断开
             if not chunk:
                 raise ConnectionError("closed")
             self.buf += chunk
@@ -195,6 +198,7 @@ def hub_handle(conn):
             "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
             f"Sec-WebSocket-Accept: {ws_accept_key(key)}\r\n\r\n"
         ).encode())
+        conn.settimeout(15)  # 收发统一超时：僵尸客户端不会永久卡死广播
         client = HubClient(conn)
         with hub_lock:
             hub_clients.append(client)
