@@ -80,23 +80,25 @@ def search_song(keyword, cookie, img_key, sub_key):
     #   3) 标题含舞蹈/教学/游戏等词的降权，时长越接近 4 分钟越好
     BAD_TITLE = ("舞蹈", "翻跳", "试跳", "教程", "教学", "混剪", "游戏", "实况",
                  "切片", "直播回放", "综艺", "访谈", "手书", "AMV", "MAD")
-    def rank(r):
+    def rank(r, pos):
         title = clean_title(r.get("title"))
         dur = parse_duration(r.get("duration"))
         if dur > MAX_DURATION or dur < 60:
             return None
         tname = str(r.get("typename") or "")
-        is_music = "音乐" in tname
+        # 音乐区判定：分区名含"音乐"，或本身就是 MV 分区（实测 B 站该分区名就叫"MV"）
+        is_music = ("音乐" in tname) or (tname == "MV")
         has_kw = keyword.lower() in title.lower()
         bad = any(w in title.upper() for w in BAD_TITLE)
+        # 最终排序用 B 站综合位次（相关性），时长只做准入过滤不参与打分
         return (0 if (is_music and has_kw) else 1,
                 0 if is_music else 1,
                 0 if has_kw else 1,
                 1 if bad else 0,
-                abs(dur - 240))
+                pos)
     best, best_key = None, None
-    for r in results:
-        k = rank(r)
+    for pos, r in enumerate(results):
+        k = rank(r, pos)
         if k is not None and (best_key is None or k < best_key):
             best, best_key = r, k
     if not best:
