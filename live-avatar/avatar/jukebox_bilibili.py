@@ -170,11 +170,11 @@ class HubLink:
 
 def run(args):
     cookie, img, sub = load_credentials()
-    state = {"jukebox_page_ts": 0.0}   # 点歌台页面最近一次心跳时间
+    # 重连不重置：冷却计时 + 同人同歌去重
+    state = {"jukebox_page_ts": 0.0, "last_song_ts": 0.0, "seen": {}}   # seen: {(user, song): ts}
     print("[点歌] 凭据已加载" + ("（冒烟模式：不会真的打开浏览器）" if args.smoke else ""), flush=True)
     while True:
         link = HubLink(("127.0.0.1", args.hub_port))
-        last_song_ts = 0.0
         try:
             link.connect()
             print(f"[点歌] 已接入事件总线 :{args.hub_port}，等待「{SONG_PREFIX} 歌名」…", flush=True)
@@ -194,7 +194,14 @@ def run(args):
                     continue
                 song, user = m.group(1).strip()[:40], msg.get("user", "匿名")
                 now = time.time()
-                if now - last_song_ts < SONG_COOLDOWN:
+                # 同人同歌 60 秒内不重复入队（防手滑连点堆积队列）
+                dup_key = (user, song)
+                if dup_key in state["seen"] and now - state["seen"][dup_key] < 60:
+                    link.send_safe({"type": "relay", "data": {"type": "danmaku", "user": user, "text": text,
+                                                        "action": "刚点过这首，在队列里啦", "state": ""}})
+                    continue
+                state["seen"][dup_key] = now
+                if now - state["last_song_ts"] < SONG_COOLDOWN:
                     link.send_safe({"type": "relay", "data": {"type": "danmaku", "user": user, "text": text,
                                                         "action": "点歌冷却中", "state": "冷却中"}})
                     continue
@@ -207,8 +214,10 @@ def run(args):
                     link.send_safe({"type": "relay", "data": {"type": "danmaku", "user": user, "text": text,
                                                             "action": "没找到这首", "state": ""}})
                     continue
+                if len(state["seen"]) > 500:
+                    state["seen"] = {k: v for k, v in state["seen"].items() if now - v < 120}
                 bvid, title, author, dur = hit
-                last_song_ts = now
+                state["last_song_ts"] = now
                 url = "https://www.bilibili.com/video/" + bvid
                 print(f"[点歌] {user}「{song}」→ {title}（{author}，{dur//60}:{dur%60:02d}）{url}", flush=True)
                 link.send_safe({"type": "relay", "data": {"type": "danmaku", "user": user, "text": text,
