@@ -81,12 +81,16 @@ rem ---------- 4. console (wait for http 200, then open; fallback to default bro
 echo [4/5] opening console...
 powershell -NoProfile -Command "$ok=$false; for($i=0;$i -lt 15;$i++){ try{ $r=Invoke-WebRequest -Uri 'http://127.0.0.1:8642/console.html' -UseBasicParsing -TimeoutSec 2; if($r.StatusCode -eq 200){$ok=$true; break} }catch{ Start-Sleep 1 } }; if(-not $ok){ exit 1 }" >nul 2>&1
 if errorlevel 1 (
-    echo [3/4] console ............. NOT reachable on :8642 [XX]
+    echo [4/5] console ............. NOT reachable on :8642 [XX]
     goto :step4
 )
 start "" msedge --app=http://127.0.0.1:8642/console.html --window-size=1150,760 2>nul
 if errorlevel 1 start "" http://127.0.0.1:8642/console.html
-echo [3/4] console ............. opened [OK]
+echo [4/5] console ............. opened [OK]
+
+rem   jukebox page (close this window to fall back to browser-tab mode)
+start "" msedge --app=http://127.0.0.1:8642/jukebox.html --window-size=1280,780 2>nul
+echo [4/5] jukebox page ....... opened
 
 :step4
 rem ---------- 5. streaming software (start + verify the process came up) ----------

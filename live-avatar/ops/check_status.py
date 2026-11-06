@@ -34,9 +34,11 @@ def port_open(port):
     return ok
 
 
+_NO_PROXY_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
 def http_ok(url):
     try:
-        urllib.request.urlopen(url, timeout=3)
+        _NO_PROXY_OPENER.open(url, timeout=3)
         return True
     except Exception:
         return False
@@ -138,6 +140,26 @@ def main():
     else:
         print("[XX] 事件总线 ............. 无响应  → 重启核心.bat")
         bad += 1
+
+    print()
+    print("--- 点歌适配器 (jukebox_bilibili) ---")
+    n = ps_count("jukebox_bilibili")
+    if n == 1:
+        print("[OK] 点歌适配器 .......... 1 个（正常）")
+    elif n > 1:
+        print("[!!] 点歌适配器 .......... %d 个（重复，建议 重启点歌适配器.bat）" % n)
+        bad += 1
+    else:
+        print("[XX] 点歌适配器 .......... 未运行（点歌不可用，弹幕互动不受影响）")
+        print("     → 双击 重启点歌适配器.bat")
+        bad += 1
+    log = os.path.normpath(os.path.join(HERE, "..", "_jukebox.log"))
+    if os.path.exists(log):
+        try:
+            lines = open(log, "rb").read().decode("utf-8", "ignore").strip().splitlines()
+            print("     日志末行: %s" % (lines[-1][:60] if lines else ""))
+        except Exception:
+            pass
 
     print()
     print("--- 推流软件 (OBS) ---")
