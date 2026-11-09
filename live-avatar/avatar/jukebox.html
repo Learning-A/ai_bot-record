@@ -125,21 +125,45 @@
   var unlocked = false;
   var hub = null;
   // 自动切歌计时（挂钟可冻结模型：锁定=冻结，解除=按剩余时间恢复）
+  // 自适应缓冲：默认歌曲时长 +12s 起步；观众侧网络卡顿导致提前切歌时，
+  // 点「续播」自动 +15s（上限 90s）并持久化，越用越贴合你的实际网络
+  var BUF_KEY = 'jukebox_buffer_sec';
+  var bufferSec = Math.min(90, Math.max(8, parseInt(localStorage.getItem(BUF_KEY) || '12', 10) || 12));
   var autoTimer = { handle: null, total: 0, elapsedBefore: 0, startedAt: 0 };
   var pauseLock = false;
+  var graceHandle = null;      // 到时后的 15 秒宽限（防网络卡顿导致提前切歌）
+  var graceActive = false;
   function elapsed() { return autoTimer.elapsedBefore + (pauseLock ? 0 : Date.now() - autoTimer.startedAt); }
+  function clearGrace() { clearTimeout(graceHandle); graceActive = false; }
   function armTimer() {
     clearTimeout(autoTimer.handle);
     if (pauseLock || !playing || !autoTimer.total) return;
     var remain = Math.max(1000, autoTimer.total - elapsed());
-    autoTimer.handle = setTimeout(next, remain);
+    autoTimer.handle = setTimeout(onTimeUp, remain);
   }
   function resetTimer(totalMs) {
     clearTimeout(autoTimer.handle);
+    clearGrace();
     autoTimer.total = totalMs;
     autoTimer.elapsedBefore = 0;
     autoTimer.startedAt = Date.now();
     if (!pauseLock) armTimer();
+  }
+  // 到时不再直接切歌：先给 15 秒宽限——歌没放完可一键续播（并自学习加大缓冲）
+  function onTimeUp() {
+    if (!playing || pauseLock) return;
+    graceActive = true;
+    graceHandle = setTimeout(next, 15000);
+    renderQueue();
+  }
+  function postpone() {
+    clearGrace();
+    if (!playing) return;
+    bufferSec = Math.min(90, bufferSec + 15);
+    localStorage.setItem(BUF_KEY, String(bufferSec));
+    autoTimer.total = elapsed() + 30000;   // 当前歌再续 30 秒
+    armTimer();
+    renderQueue();
   }
 
   function setDot(on) { document.getElementById('dot').classList.toggle('on', on); }
@@ -161,7 +185,7 @@
     modeEl.textContent = '播放中' + (pauseLock ? '（切歌已锁定）' : '');
     // B 站 iframe 拿不到播放结束事件，用搜索得到的时长 + 缓冲来定时切歌
     // （可被「锁定切歌」冻结：暂停播放期间不会被跳歌）
-    resetTimer((song.duration + 8) * 1000);
+    resetTimer(song.duration * 1000 + bufferSec * 1000);
     renderQueue();
   }
 
@@ -175,6 +199,7 @@
       pempty.style.display = 'flex';
       modeEl.textContent = '待命';
       clearTimeout(autoTimer.handle);
+      clearGrace();
       autoTimer.total = 0;
     }
     renderQueue();
@@ -204,6 +229,7 @@
     if (playing) {
       html += '<div class="row playing"><span class="idx">▶</span><span class="t">' +
               esc(playing.title) + '</span><span class="u">' + esc(playing.user) + '</span>' +
+              (graceActive ? '<button class="skip post">还没放完·续播</button>' : '') +
               '<button class="skip">跳过</button></div>';
     }
     queue.forEach(function (s, i) {
@@ -221,6 +247,7 @@
   }
 
   queueEl.addEventListener('click', function (ev) {
+    if (ev.target.classList.contains('post')) { postpone(); return; }
     if (!ev.target.classList.contains('skip')) return;
     var rows = Array.prototype.slice.call(queueEl.querySelectorAll('.row'));
     var idx = rows.indexOf(ev.target.closest('.row'));
@@ -236,6 +263,7 @@
   lockBtn.onclick = function () {
     pauseLock = !pauseLock;
     if (pauseLock) {
+      clearGrace();
       autoTimer.elapsedBefore += Date.now() - autoTimer.startedAt; // 冻结已播时长
       clearTimeout(autoTimer.handle);
       lockBtn.classList.add('locked');
