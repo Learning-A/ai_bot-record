@@ -17,6 +17,13 @@
 """
 import argparse, base64, hashlib, json, os, socket, ssl, struct, threading, time, urllib.parse, urllib.request, zlib
 
+import sys
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass
+
 try:
     import brotlicffi as brotli
     PROTOVER = 3

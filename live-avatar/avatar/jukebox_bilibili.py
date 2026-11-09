@@ -22,6 +22,13 @@ B 模式（点歌台页面在线时自动启用）：jukebox.html 通过 relay �
 """
 import argparse, base64, hashlib, json, os, re, socket, struct, threading, time, urllib.parse, urllib.request
 
+import sys
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass
+
 UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
 
 # 禁代理 opener：无视 HTTP_PROXY 环境变量（本机 Clash 开关不应影响B站API直连）
@@ -88,38 +95,65 @@ def search_song(keyword, cookie, img_key, sub_key):
     STUDIO_WORDS = ("录音棚", "HI-RES", "无损", "MV", "专辑", "STUDIO")
     COVER_WORDS = ("翻唱", "COVER", "串烧", "填词", "改编", "钢琴版", "吉他版", "空耳", "男生版", "女生版")
     # 点歌带歌手名（如"大鱼 周深"）时，标题含歌手名 = 原唱强信号
-    hints = [seg for seg in keyword.split() if seg][1:]
+    toks = [seg for seg in keyword.split() if seg]
+    # 版本/歌手提示词：中文词全保留；英文词仅保留长度>=4的（滤掉 of/the 之类）
+    hints = [x for x in toks[1:] if any(ord(c) > 0x2E80 for c in x) or len(x) >= 4]
+
+    def _hit(text_l, h):
+        """提示词命中（"蔚蓝版"也命中"蔚蓝"，容忍书名号/中点等变体）"""
+        if h in text_l:
+            return True
+        trimmed = h[:-1] if h.endswith("版") and len(h) > 1 else None
+        return trimmed is not None and trimmed in text_l
+
+    def kw_match(title):
+        """全词命中 > 首词命中（首词=歌名，其余=歌手/版本提示）"""
+        tl = title.lower()
+        if all(t.lower() in tl for t in toks):
+            return 0
+        if toks and toks[0].lower() in tl:
+            return 1
+        return 2
     def rank(r, pos):
         title = clean_title(r.get("title"))
         dur = parse_duration(r.get("duration"))
         if dur > MAX_DURATION or dur < 60:
             return None
         tname = str(r.get("typename") or "")
+        author_l = str(r.get("author") or "").lower()
+        title_l = title.lower()
+        # 观众显式指定了版本/歌手（如"朝天门 蔚蓝版"/"起风了 林俊杰"）：
+        # 标题或UP主名命中提示词 → 最高优先，压过一切默认偏好（含原唱>翻唱）
+        explicit = 1
+        if hints and any(_hit(title_l, h.lower()) or _hit(author_l, h.lower()) for h in hints):
+            explicit = 0
         # 音乐区判定：分区名含"音乐"，或本身就是 MV 分区（实测 B 站该分区名就叫"MV"）
         is_music = ("音乐" in tname) or (tname == "MV")
-        has_kw = keyword.lower() in title.lower()
+        kw_tier = kw_match(title)
+        has_kw = kw_tier < 2
         up = title.upper()
         bad = any(w in up for w in BAD_TITLE)
         live = any(w in up for w in LIVE_WORDS)
         studio = (not live) and any(w in up for w in STUDIO_WORDS)
         cover = any(w in up for w in COVER_WORDS)
-        artist_miss = 1 if (hints and not any(h in title for h in hints)) else 0
-        # 最终排序用 B 站综合位次（相关性），时长只做准入过滤不参与打分
-        return (0 if (is_music and has_kw) else 1,
+        # 同级结果里更接近典型单曲时长(2.5~6.5分钟)的优先
+        dur_typical = 0 if 150 <= dur <= 390 else 1
+        return (explicit,               # 观众显式意图最高优先
+                0 if (is_music and has_kw) else 1,
                 0 if is_music else 1,
-                0 if has_kw else 1,
+                kw_tier,
                 1 if bad else 0,
                 0 if studio else 1,      # 录音棚/无损/MV 优先于现场版
-                artist_miss,             # 标题含点歌指定的歌手（原唱信号）
-                1 if cover else 0,       # 翻唱/串烧降权
+                1 if cover else 0,       # 翻唱/串烧降权（被显式意图覆盖时不生效）
+                dur_typical,
                 pos)
     best, best_key = None, None
     for pos, r in enumerate(results):
         k = rank(r, pos)
         if k is not None and (best_key is None or k < best_key):
             best, best_key = r, k
-    if not best:
-        return None
+    if not best or not (best_key and best_key[3] < 2):
+        return None  # 全部关键词失配：宁可不播，不随机播放
     return best.get("bvid"), clean_title(best.get("title")), best.get("author"), parse_duration(best.get("duration"))
 
 
@@ -219,6 +253,8 @@ def run(args):
                     continue
                 if mtype != "danmaku":
                     continue
+                if msg.get("action") or msg.get("state") or msg.get("src") == "jukebox":
+                    continue  # 应答回显（含自己的 relay 应答）——处理它会形成无限自我循环风暴
                 text = str(msg.get("text", "")).strip()
                 m = re.match("^" + SONG_PREFIX + r"\s*(.+)$", text)
                 if not m:
@@ -228,12 +264,12 @@ def run(args):
                 # 同人同歌 60 秒内不重复入队（防手滑连点堆积队列）
                 dup_key = (user, song)
                 if dup_key in state["seen"] and now - state["seen"][dup_key] < 60:
-                    link.send_safe({"type": "relay", "data": {"type": "danmaku", "user": user, "text": text,
+                    link.send_safe({"type": "relay", "data": {"src": "jukebox", "type": "danmaku", "user": user, "text": text,
                                                         "action": "刚点过这首，在队列里啦", "state": ""}})
                     continue
                 state["seen"][dup_key] = now
                 if now - state["last_song_ts"] < SONG_COOLDOWN:
-                    link.send_safe({"type": "relay", "data": {"type": "danmaku", "user": user, "text": text,
+                    link.send_safe({"type": "relay", "data": {"src": "jukebox", "type": "danmaku", "user": user, "text": text,
                                                         "action": "点歌冷却中", "state": "冷却中"}})
                     continue
                 try:
@@ -242,7 +278,7 @@ def run(args):
                     print("[点歌] 搜索失败:", e, flush=True)
                     hit = None
                 if not hit:
-                    link.send_safe({"type": "relay", "data": {"type": "danmaku", "user": user, "text": text,
+                    link.send_safe({"type": "relay", "data": {"src": "jukebox", "type": "danmaku", "user": user, "text": text,
                                                             "action": "没找到这首", "state": ""}})
                     continue
                 if len(state["seen"]) > 500:
@@ -251,7 +287,7 @@ def run(args):
                 state["last_song_ts"] = now
                 url = "https://www.bilibili.com/video/" + bvid
                 print(f"[点歌] {user}「{song}」→ {title}（{author}，{dur//60}:{dur%60:02d}）{url}", flush=True)
-                link.send_safe({"type": "relay", "data": {"type": "danmaku", "user": user, "text": text,
+                link.send_safe({"type": "relay", "data": {"src": "jukebox", "type": "danmaku", "user": user, "text": text,
                                                         "action": "♪ " + title, "state": "已触发"}})
                 import random
                 link.send_safe({"type": "relay", "data": {"type": "action",
