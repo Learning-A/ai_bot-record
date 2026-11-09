@@ -51,6 +51,7 @@
     background: rgba(255,255,255,.09); color: #eaf2ff; border: 1px solid rgba(255,255,255,.22);
   }
   .q-head button:hover { background: #e05a5a; border-color: #e05a5a; }
+  #lock.locked { background: #b8860b; border-color: #ffd452; color: #ffd452; }
   #queue { flex: 1; overflow-y: auto; padding: 4px 14px 14px; font-size: 14px; }
   #queue .row {
     display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 10px;
@@ -101,6 +102,8 @@
   </div>
   <div class="queue-side">
     <div class="q-head">队列<span class="n" id="qn">0</span>
+      <button id="replay" title="从头重播当前歌曲">↻ 重播</button>
+      <button id="lock" title="冻结自动切歌计时器：暂停播放期间不会被跳歌">⏸ 锁定切歌</button>
       <button id="clear">清空队列</button>
     </div>
     <div id="queue"><div class="empty-q">还没有人点歌</div></div>
@@ -119,9 +122,25 @@
 
   var queue = [];          // [{bvid,title,user,duration}]
   var playing = null;
-  var endTimer = null;
   var unlocked = false;
   var hub = null;
+  // 自动切歌计时（挂钟可冻结模型：锁定=冻结，解除=按剩余时间恢复）
+  var autoTimer = { handle: null, total: 0, elapsedBefore: 0, startedAt: 0 };
+  var pauseLock = false;
+  function elapsed() { return autoTimer.elapsedBefore + (pauseLock ? 0 : Date.now() - autoTimer.startedAt); }
+  function armTimer() {
+    clearTimeout(autoTimer.handle);
+    if (pauseLock || !playing || !autoTimer.total) return;
+    var remain = Math.max(1000, autoTimer.total - elapsed());
+    autoTimer.handle = setTimeout(next, remain);
+  }
+  function resetTimer(totalMs) {
+    clearTimeout(autoTimer.handle);
+    autoTimer.total = totalMs;
+    autoTimer.elapsedBefore = 0;
+    autoTimer.startedAt = Date.now();
+    if (!pauseLock) armTimer();
+  }
 
   function setDot(on) { document.getElementById('dot').classList.toggle('on', on); }
 
@@ -139,10 +158,10 @@
     // _r 时间戳：连续播同一首歌时 src 变化强制重载 iframe（否则不重载、看似连播失效）
     pf.src = 'https://player.bilibili.com/player.html?bvid=' + song.bvid +
              '&autoplay=1&danmaku=0&high_quality=1&_r=' + Date.now();
-    modeEl.textContent = '播放中';
-    clearTimeout(endTimer);
+    modeEl.textContent = '播放中' + (pauseLock ? '（切歌已锁定）' : '');
     // B 站 iframe 拿不到播放结束事件，用搜索得到的时长 + 缓冲来定时切歌
-    endTimer = setTimeout(next, (song.duration + 8) * 1000);
+    // （可被「锁定切歌」冻结：暂停播放期间不会被跳歌）
+    resetTimer((song.duration + 8) * 1000);
     renderQueue();
   }
 
@@ -155,7 +174,8 @@
       pf.style.display = 'none';
       pempty.style.display = 'flex';
       modeEl.textContent = '待命';
-      clearTimeout(endTimer);
+      clearTimeout(autoTimer.handle);
+      autoTimer.total = 0;
     }
     renderQueue();
   }
@@ -212,6 +232,26 @@
     }
   });
   document.getElementById('clear').onclick = function () { queue = []; renderQueue(); };
+  var lockBtn = document.getElementById('lock');
+  lockBtn.onclick = function () {
+    pauseLock = !pauseLock;
+    if (pauseLock) {
+      autoTimer.elapsedBefore += Date.now() - autoTimer.startedAt; // 冻结已播时长
+      clearTimeout(autoTimer.handle);
+      lockBtn.classList.add('locked');
+      lockBtn.textContent = '▶ 恢复切歌';
+      modeEl.textContent = playing ? '播放中（切歌已锁定）' : '待命（切歌已锁定）';
+    } else {
+      autoTimer.startedAt = Date.now();
+      armTimer();
+      lockBtn.classList.remove('locked');
+      lockBtn.textContent = '⏸ 锁定切歌';
+      modeEl.textContent = playing ? '播放中' : '待命';
+    }
+  };
+  document.getElementById('replay').onclick = function () {
+    if (playing) { play(playing); }   // 时间戳重载机制保证 iframe 重新开始
+  };
 
   // ---------------- 解锁层 ----------------
   document.getElementById('unlock').addEventListener('click', function () {
