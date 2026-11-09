@@ -70,6 +70,26 @@ def parse_duration(s):
         return 10 ** 9  # 解析失败当作超长，直接过滤
 
 
+def get_media_url(bvid, cookie):
+    """取视频的 html5 mp4 直链（自有播放器精确播放用）。失败返回 None，页面自动退回 iframe。"""
+    try:
+        req = urllib.request.Request(
+            "https://api.bilibili.com/x/player/pagelist?bvid=" + bvid,
+            headers={"User-Agent": UA, "Cookie": cookie,
+                     "Referer": "https://www.bilibili.com/"})
+        cid = json.load(_NO_PROXY_OPENER.open(req, timeout=15))["data"][0]["cid"]
+        req = urllib.request.Request(
+            "https://api.bilibili.com/x/player/playurl?bvid=%s&cid=%s&qn=16&platform=html5&fnval=1" % (bvid, cid),
+            headers={"User-Agent": UA, "Cookie": cookie,
+                     "Referer": "https://www.bilibili.com/"})
+        d = json.load(_NO_PROXY_OPENER.open(req, timeout=15))
+        durl = ((d.get("data") or {}).get("durl") or [])
+        return (durl[0].get("url"), int(durl[0].get("size", 0))) if durl else (None, 0)
+    except Exception as e:
+        print("[点歌] 直链获取失败（将退回iframe模式）:", e, flush=True)
+        return (None, 0)
+
+
 def search_song(keyword, cookie, img_key, sub_key):
     """返回 (bvid, title, author, duration秒) 或 None"""
     params = {"search_type": "video", "keyword": keyword, "page": 1,
@@ -289,9 +309,11 @@ def run(args):
                 link.send_safe({"type": "relay", "data": {"type": "action",
                                                         "name": random.choice(SONG_ACTIONS),
                                                         "text": "♪ 即将播放：" + title, "user": user}})
+                media_url, _sz = get_media_url(bvid, cookie)
                 link.send_safe({"type": "relay", "data": {"type": "song", "bvid": bvid,
                                                         "title": title, "user": user,
-                                                        "duration": dur, "url": url}})
+                                                        "duration": dur, "url": url,
+                                                        "media": media_url}})
                 page_online = time.time() - state["jukebox_page_ts"] < 70
                 if args.smoke:
                     print(f"[点歌][SMOKE] song事件已广播；{'点歌台在线(B模式)' if page_online else '点歌台离线，将开浏览器(A模式)'}: {url}", flush=True)

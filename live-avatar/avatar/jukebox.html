@@ -96,6 +96,7 @@
   <div class="player-side">
     <div id="player">
       <iframe id="pf" allow="autoplay; encrypted-media" style="display:none"></iframe>
+      <video id="ov" controls playsinline style="display:none;width:100%;height:100%;background:#000"></video>
       <div class="empty" id="pempty">🎵 等待点歌…<span style="font-size:12px">弹幕发送「点歌 歌名」试试</span></div>
     </div>
     <div class="now">当前播放：<b id="cur">—</b></div>
@@ -114,12 +115,15 @@
 (function () {
   'use strict';
   var pf = document.getElementById('pf');
+  var ov = document.getElementById('ov');
+  ov.addEventListener('ended', function () { if (ownMode) { next(); } });
   var pempty = document.getElementById('pempty');
   var cur = document.getElementById('cur');
   var queueEl = document.getElementById('queue');
   var qn = document.getElementById('qn');
   var modeEl = document.getElementById('mode');
 
+  var ownMode = false;      // true=自有video直链播放(ended事件精确切歌) false=iframe兜底(定时器+宽限)
   var queue = [];          // [{bvid,title,user,duration}]
   var playing = null;
   var unlocked = false;
@@ -178,14 +182,28 @@
     playing = song;
     cur.textContent = song.title + '（' + song.user + ' 点播）';
     pempty.style.display = 'none';
-    pf.style.display = 'block';
-    // _r 时间戳：连续播同一首歌时 src 变化强制重载 iframe（否则不重载、看似连播失效）
-    pf.src = 'https://player.bilibili.com/player.html?bvid=' + song.bvid +
-             '&autoplay=1&danmaku=0&high_quality=1&_r=' + Date.now();
-    modeEl.textContent = '播放中' + (pauseLock ? '（切歌已锁定）' : '');
-    // B 站 iframe 拿不到播放结束事件，用搜索得到的时长 + 缓冲来定时切歌
-    // （可被「锁定切歌」冻结：暂停播放期间不会被跳歌）
-    resetTimer(song.duration * 1000 + bufferSec * 1000);
+    clearTimeout(autoTimer.handle);
+    clearGrace();
+    if (song.media) {
+      // 精确模式：自有 video 直链播放——ended 事件播完才切，暂停/卡顿永不误切
+      ownMode = true;
+      pf.style.display = 'none';
+      ov.style.display = 'block';
+      ov.src = song.media;   // src 赋值自动重新加载（同曲重播也生效）
+      var pp = ov.play();
+      if (pp && pp.catch) pp.catch(function () {});
+      modeEl.textContent = '播放中（精确模式）';
+    } else {
+      // 兜底模式：iframe 播放器 + 定时器（时长+自学习缓冲）+ 到时宽限
+      ownMode = false;
+      ov.style.display = 'none';
+      pf.style.display = 'block';
+      // _r 时间戳：连续播同一首歌时 src 变化强制重载 iframe（否则不重载、看似连播失效）
+      pf.src = 'https://player.bilibili.com/player.html?bvid=' + song.bvid +
+               '&autoplay=1&danmaku=0&high_quality=1&_r=' + Date.now();
+      modeEl.textContent = '播放中（兜底模式）' + (pauseLock ? '·锁定' : '');
+      resetTimer(song.duration * 1000 + bufferSec * 1000);
+    }
     renderQueue();
   }
 
@@ -196,6 +214,8 @@
       playing = null;
       cur.textContent = '—';
       pf.style.display = 'none';
+      ov.style.display = 'none';
+      ov.pause();
       pempty.style.display = 'flex';
       modeEl.textContent = '待命';
       clearTimeout(autoTimer.handle);
@@ -286,6 +306,7 @@
     unlocked = true;
     this.classList.add('hide');
     hello();
+    if (ownMode && playing) { var pp = ov.play(); if (pp && pp.catch) pp.catch(function () {}); }
     if (!playing && queue.length) play(queue.shift());
   });
 
@@ -302,7 +323,8 @@
       try {
         var m = JSON.parse(ev.data);
         if (m.type === 'song' && m.bvid) {
-          enqueue({ bvid: m.bvid, title: m.title || m.bvid, user: m.user || '观众', duration: m.duration || 240 });
+          enqueue({ bvid: m.bvid, title: m.title || m.bvid, user: m.user || '观众',
+                    duration: m.duration || 240, media: m.media || null });
         }
       } catch (e) {}
     };
