@@ -266,11 +266,13 @@ def run(args):
                 if dup_key in state["seen"] and now - state["seen"][dup_key] < 60:
                     link.send_safe({"type": "relay", "data": {"src": "jukebox", "type": "danmaku", "user": user, "text": text,
                                                         "action": "刚点过这首，在队列里啦", "state": ""}})
+                    print(f"[点歌] {user}「{song}」重复点播（60s内），已忽略", flush=True)
                     continue
                 state["seen"][dup_key] = now
                 if now - state["last_song_ts"] < SONG_COOLDOWN:
                     link.send_safe({"type": "relay", "data": {"src": "jukebox", "type": "danmaku", "user": user, "text": text,
                                                         "action": "点歌冷却中", "state": "冷却中"}})
+                    print(f"[点歌] {user}「{song}」撞全局冷却（{SONG_COOLDOWN:.0f}s），已拒绝", flush=True)
                     continue
                 try:
                     hit = search_song(song, cookie, img, sub)
@@ -280,6 +282,7 @@ def run(args):
                 if not hit:
                     link.send_safe({"type": "relay", "data": {"src": "jukebox", "type": "danmaku", "user": user, "text": text,
                                                             "action": "没找到这首", "state": ""}})
+                    print(f"[点歌] {user}「{song}」搜索无合格结果（关键词失配或全被过滤），已提示没找到", flush=True)
                     continue
                 if len(state["seen"]) > 500:
                     state["seen"] = {k: v for k, v in state["seen"].items() if now - v < 120}
