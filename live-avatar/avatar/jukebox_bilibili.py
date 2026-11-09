@@ -8,7 +8,7 @@
 4. 广播鱼的演唱动作 + 气泡，然后在本机浏览器打开视频页
    （声音走系统音频 → OBS 桌面音频采集，与你手动播放完全一致）
 
-点歌规则：弹幕/cmd 文本以「点歌」开头；全局冷却 SONG_COOLDOWN 秒；
+点歌规则：弹幕/cmd 文本以「点歌」开头；同人同歌 60 秒去重（无全局冷却）；
 时长超过 MAX_DURATION 的结果跳过；搜不到时在弹幕流提示。
 
 B 模式（点歌台页面在线时自动启用）：jukebox.html 通过 relay 心跳宣告存在，
@@ -36,7 +36,6 @@ _NO_PROXY_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 WBI_TAB = [46, 47, 18, 2, 53, 8, 23, 32, 15, 50, 10, 31, 58, 3, 45, 35, 27, 43, 5, 49, 33, 9, 42, 19, 29, 28, 14, 39, 12, 38, 41, 13, 37, 48, 7, 16, 24, 55, 40, 61, 26, 17, 0, 1, 60, 51, 30, 4, 22, 25, 54, 21, 56, 59, 6, 63, 57, 62, 11, 36, 20, 34, 44, 52]
 
 SONG_PREFIX = "点歌"
-SONG_COOLDOWN = 30.0     # 两首点歌之间的全局冷却（秒）
 MAX_DURATION = 600       # 结果时长上限（秒），过滤长视频/合集
 SONG_ACTIONS = ["悠闲哼歌", "可爱宅舞", "轻快摇摆舞", "小提琴演奏", "吹笛子"]  # 演唱/演奏动作池
 
@@ -236,7 +235,7 @@ class HubLink:
 def run(args):
     cookie, img, sub = load_credentials()
     # 重连不重置：冷却计时 + 同人同歌去重
-    state = {"jukebox_page_ts": 0.0, "last_song_ts": 0.0, "seen": {}}   # seen: {(user, song): ts}
+    state = {"jukebox_page_ts": 0.0, "seen": {}}   # seen: {(user, song): ts}
     print("[点歌] 凭据已加载" + ("（冒烟模式：不会真的打开浏览器）" if args.smoke else ""), flush=True)
     while True:
         link = HubLink(("127.0.0.1", args.hub_port))
@@ -269,11 +268,6 @@ def run(args):
                     print(f"[点歌] {user}「{song}」重复点播（60s内），已忽略", flush=True)
                     continue
                 state["seen"][dup_key] = now
-                if now - state["last_song_ts"] < SONG_COOLDOWN:
-                    link.send_safe({"type": "relay", "data": {"src": "jukebox", "type": "danmaku", "user": user, "text": text,
-                                                        "action": "点歌冷却中", "state": "冷却中"}})
-                    print(f"[点歌] {user}「{song}」撞全局冷却（{SONG_COOLDOWN:.0f}s），已拒绝", flush=True)
-                    continue
                 try:
                     hit = search_song(song, cookie, img, sub)
                 except Exception as e:
@@ -287,7 +281,6 @@ def run(args):
                 if len(state["seen"]) > 500:
                     state["seen"] = {k: v for k, v in state["seen"].items() if now - v < 120}
                 bvid, title, author, dur = hit
-                state["last_song_ts"] = now
                 url = "https://www.bilibili.com/video/" + bvid
                 print(f"[点歌] {user}「{song}」→ {title}（{author}，{dur//60}:{dur%60:02d}）{url}", flush=True)
                 link.send_safe({"type": "relay", "data": {"src": "jukebox", "type": "danmaku", "user": user, "text": text,
